@@ -3,7 +3,7 @@
 Local validation for the 23 October 2026 research edition:
 
 - Quarto 1.10.18 successfully rendered all 20 HTML pages and the 140-page combined PDF.
-- All 92 bibliography entries parse and resolve; 199 source labels are unique and resolve.
+- All 92 bibliography entries parse and resolve; 199 source labels are unique and resolve. A final Crossref metadata audit matched 71 publisher DOI records; the Caltech thesis has a separate DataCite DOI and was checked against its primary record.
 - The local publication checker verified every HTML link, fragment, image, script, PDF download, and search index against its target.
 - All 2,158 rendered mathematical expressions parsed successfully with MathJax 3.2.2 and the book's shared macros. This is a syntax check, complemented by independent scientific review.
 - Representative PDF pages were rendered with Poppler and visually reviewed for title, mathematics, code, figures, solutions, and bibliography layout.

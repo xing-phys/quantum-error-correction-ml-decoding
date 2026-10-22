@@ -22,10 +22,8 @@ jobs:
         with:
           version: '1.10.18'
           tinytex: true
-      - name: Install SVG conversion and verification dependencies
+      - name: Install verification dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y inkscape
           python -m pip install -r requirements-lock.txt
       - name: Merge verified references and build HTML/PDF
         run: |

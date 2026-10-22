@@ -8,7 +8,7 @@ The book contains 17 numbered teaching chapters, an introduction, a notation app
 
 ## Build
 
-Install Quarto 1.10.18 and a working LuaLaTeX distribution (or use `quarto install tinytex`). Inkscape converts SVG figures for PDF; matching PDF/PNG originals are provided in `figs/`.
+Install Quarto 1.10.18 and a working LuaLaTeX distribution (or use `quarto install tinytex`). Matching SVG/PDF/PNG figure assets are provided in `figs/`, so the book build needs no SVG conversion utility.
 
 ```bash
 python3 -m venv .venv
