@@ -1,0 +1,75 @@
+# A course in quantum error correction and intelligent decoding {.unnumbered}
+
+::: {.content-visible when-format="html"}
+<div class="hero">
+<div class="hero-kicker">An open graduate textbook · Research edition 2026</div>
+<p class="hero-lead">How can a noisy quantum device preserve information—and how can a classical algorithm infer the correction before the next decision is needed?</p>
+<div class="book-facts"><span>First principles → frontier research</span><span>Derivations & worked solutions</span><span>Julia + Python laboratories</span><span>Interactive examples</span></div>
+</div>
+:::
+
+## The organizing idea
+
+Quantum error correction protects a state by distributing its information across many physical systems. Measurements reveal constraints violated by noise while preserving the unknown logical amplitudes. Decoding converts those measurement records into a decision about the remaining logical information. The task sits at the intersection of quantum mechanics, coding theory, statistical inference, computation, and experimental control.
+
+This book develops that intersection from the beginning. You need the mathematical maturity of a senior undergraduate physics course, but no previous coding theory, QEC, or machine learning. The first chapters review the required binary algebra, probability, and quantum channels. Later chapters derive conventional and learned decoders, then examine what their numerical and hardware benchmarks actually establish.
+
+![The physical-to-classical inference loop. Decoding selects a logical action from imperfect measurements, often by updating a classical Pauli frame.](figs/decoding-pipeline)
+
+The most useful distinction is between **a physical error**, **a syndrome**, and **a logical class**. Many errors share a syndrome; stabilizers make many of them physically equivalent on the encoded information. The best decoder therefore need not recover the most likely individual error. It should minimize the relevant logical failure probability. This distinction recurs in matching, belief propagation, tensor networks, neural classification, and generative inference.
+
+## How to read the book
+
+Part I builds the language: classical redundancy, quantum channels and correctability, stabilizer algebra, and CSS codes. Part II constructs surface, color, and qLDPC codes and turns ideal correction into fault-tolerant circuits. Part III develops inference algorithms and the statistical mechanics of their thresholds. Part IV introduces learning from first principles and derives neural, graph, attention, autoregressive, diffusion, and reinforcement-learning approaches. Part V explains experimental benchmarking and supplies executable laboratories.
+
+Each chapter includes exercises with worked solutions. In HTML, expand a solution when ready; in the combined PDF, the solution text remains available. The laboratories make small cases exact so that assumptions and approximations can be checked. Larger examples use established circuit-simulation and decoding software with explicit versions and seeds.
+
+::: {.reading-path}
+**First course:** read Chapters 1–7, then matching and belief propagation, the ML foundations, and the computational labs. Return to tensor networks and generative models after working through the syndrome and logical-class examples.
+
+**Research bridge:** after the foundations, compare Chapters 8–10 with Chapters 12–14. Read the research map and benchmarking chapter together before interpreting a reported improvement.
+
+**Experimental focus:** prioritize fault propagation, detector histories, distribution shift, soft readout, latency, and the circuit-level lab. A decoder's noise model and its place in the feedback path are part of the algorithm.
+:::
+
+## A sixteen-week course
+
+| Week | Topic | Practical milestone |
+|---:|---|---|
+| 1 | Binary algebra, probability, quantum channels | Solve binary linear systems and compute posterior risks |
+| 2 | Classical coding and Shannon's viewpoint | Decode repetition and Hamming codes |
+| 3 | Quantum correctability and Shor's code | Verify Knill–Laflamme conditions in a small example |
+| 4 | Stabilizers, CSS, and Steane's code | Construct logical operators and equivalence classes |
+| 5 | Surface and color codes | Relate defects, boundaries, and homology |
+| 6 | Quantum LDPC constructions | Build a hypergraph product and check commutation |
+| 7 | Fault tolerance and circuit noise | Derive a detector history and identify hook errors |
+| 8 | Matching, union-find, and renormalization | Build a weighted decoding graph |
+| 9 | BP, OSD, and localized postprocessing | Repair a syndrome-consistent candidate |
+| 10 | Statistical mechanics and tensors | Sum class probabilities and study truncation |
+| 11 | ML objectives, training, and calibration | Train a transparent small neural classifier |
+| 12 | CNNs, recurrent models, and GNNs | Analyze locality and exact consistency |
+| 13 | Transformers and recurrent attention | Estimate attention memory and streaming state |
+| 14 | Generative inference and RL | Compare conditional sampling and sequential control |
+| 15 | Thresholds and hardware constraints | Design a fair accuracy/latency benchmark |
+| 16 | Frontier synthesis and project | Reproduce a baseline and propose a falsifiable extension |
+
+Suggested capstone projects include a calibrated learned BP update, a small-code generative posterior checked against exact enumeration, a distribution-shift study, or a matched comparison of decoding speed and logical risk. A project should state a concrete hypothesis and a test that could disprove it.
+
+## Evidence, scope, and research status
+
+The research audit was conducted for this edition on **23 October 2026**. The book synthesizes landmark papers and selected recent primary research across the principal code and decoder families. It distinguishes mathematical guarantees, numerical observations under specified noise models, hardware demonstrations, and conjectures. Preprints are labeled in the research discussion; their presence in the bibliography does not imply peer review. The research map explains the search strategy and known coverage limits. No finite textbook or search can guarantee inclusion of every relevant paper or researcher.
+
+The core treatment concerns qubit stabilizer and CSS decoding, with connections to subsystem, bosonic, erasure, and logical-circuit settings. Good qLDPC existence theorems and fault-tolerance results are explained with their construction mechanisms and assumptions; their full combinatorial proofs would require a separate advanced text. Current experimental records and asymptotic claims are interpreted within their stated models. The goal is to make the main methods and motivations understandable without repeatedly returning to papers for basic definitions or missing derivation steps.
+
+This is an authored synthesis with original instructional examples and diagrams, not a reproduction of the cited works. Consult a primary paper when relying on a precise theorem hypothesis, an experimental protocol detail, or an unreviewed new claim. Readers are encouraged to preserve substantial derivations and project findings as reproducible research notes.
+
+## Source, computation, and offline reading
+
+Use the sidebar for chapter navigation, the search icon for terms and equations, and the light/dark control for reading. Numbered equations, figures, sections, and citations link to their targets. The source repository contains all Quarto files, bibliography, plotting scripts, examples, raw lab data, dependency versions, and the GitHub Pages build workflow. The sidebar's PDF download provides a combined edition; browser interactions have accompanying mathematical or paper-based explanations.
+
+- [Source repository](https://github.com/xing-phys/quantum-error-correction-ml-decoding)
+- [Computational laboratories](17-computational-labs.qmd)
+- [Notation and decoder checklist](18-notation-solutions.qmd)
+- [Complete bibliography](references.qmd)
+
+Begin with [The mathematical language](01-prerequisites.qmd).

@@ -1,0 +1,264 @@
+# Quantum error correction from first principles {#sec-quantum-correction}
+
+A quantum memory must preserve an unknown state, including its entanglement with systems that never enter the laboratory. This requirement is stronger than preserving the probabilities of computational-basis outcomes. A device that measures a qubit in the $Z$ basis and prepares the observed value preserves $\ket0$ and $\ket1$ perfectly, yet destroys $\ket+$ and one half of a Bell pair. Quantum error correction must protect all these possibilities with the same procedure.
+
+The central discovery is that one can measure an error syndrome without measuring the encoded information. Redundancy lives in a larger Hilbert space, rather than in several independent copies of an unknown state. This chapter builds that idea explicitly and derives the exact condition for a code to correct a channel. Throughout, encoding and recovery operations are ideal unless stated otherwise. Protecting the recovery procedure itself is the separate problem of fault tolerance.
+
+## What no-cloning does and does not forbid
+
+Suppose a unitary could clone two states using a fixed blank register:
+
+$$
+U\ket\psi\ket0=\ket\psi\ket\psi,
+\qquad
+U\ket\phi\ket0=\ket\phi\ket\phi.
+$$
+
+Preservation of inner products would require $\braket{\phi|\psi}=\braket{\phi|\psi}^2$. The overlap must therefore be zero or one. A single device cannot clone arbitrary nonorthogonal unknown states. An additional fixed ancilla does not change this conclusion if it is required to finish in the same state; the general no-cloning statement also follows by linearity. This obstruction was identified explicitly by Wootters and Zurek [@wootters1982].
+
+Encoding is different. An isometry $V$ maps a two-dimensional logical space into a two-dimensional subspace of a much larger physical space. For example,
+
+$$
+V(\alpha\ket0+\beta\ket1)=\alpha\ket{000}+\beta\ket{111},
+$$
+
+which is not $(\alpha\ket0+\beta\ket1)^{\otimes3}$. The amplitudes occur once each. Individual physical qubits generally do not contain the original pure state. The information resides in joint correlations, while some other collective observables can be fixed and measured without learning $\alpha$ or $\beta$.
+
+A code encoding $k$ logical qubits into $n$ physical qubits is a $2^k$-dimensional subspace $\mathcal C\subseteq(\mathbb C^2)^{\otimes n}$, with projector $P=VV^\dagger$. We denote an arbitrary encoded density operator by $\rho=P\rho P$. Correctability of a channel $\mathcal N$ means there exists a completely positive trace-preserving recovery $\mathcal R$ such that
+
+$$
+(\mathcal R\circ\mathcal N)(\rho)=\rho
+\quad\text{for every }\rho=P\rho P.
+$$ {#eq-qec-perfect-recovery}
+
+This identity of channels on the code also preserves arbitrary entanglement with a reference. To see why, expand a joint reference-code operator in matrix units $\ket i\bra j$ on the code. Equality of the channel on every density operator implies equality on these matrix units by linearity, and hence on every joint operator after tensoring with the identity.
+
+## A quantum repetition code that really works {#sec-three-qubit-code}
+
+Take $\ket{0_L}=\ket{000}$ and $\ket{1_L}=\ket{111}$. Both have eigenvalue $+1$ under $Z_1Z_2$ and $Z_2Z_3$. These operators commute. Their simultaneous measurement reveals two signs, which we encode as syndrome bits by eigenvalue $(-1)^{s_a}$.
+
+An $X$ error anticommutes with $Z$ on the same qubit. Therefore
+
+| Error | $s_1$ from $Z_1Z_2$ | $s_2$ from $Z_2Z_3$ | Recovery |
+|:--|:--:|:--:|:--|
+| $I$ | 0 | 0 | $I$ |
+| $X_1$ | 1 | 0 | $X_1$ |
+| $X_2$ | 1 | 1 | $X_2$ |
+| $X_3$ | 0 | 1 | $X_3$ |
+
+![Syndrome measurement separates four two-dimensional error subspaces of the three-qubit Hilbert space. For the correctable set $\{I,X_1,X_2,X_3\}$ and ordered checks $(Z_1Z_2,Z_2Z_3)$, the sectors have labels $00,10,11,01$, respectively. Measuring a sector does not measure the logical amplitudes $\alpha,\beta$ within it; conditional recovery preserves both amplitudes. The label $00$ means the unchanged code subspace here, rather than a guarantee that an arbitrary physical process caused no error.](figs/syndrome-subspaces){#fig-repetition-syndrome-subspaces}
+
+In @fig-repetition-syndrome-subspaces, the branches describe orthogonal subspaces rather than separate values of the encoded state.
+
+For example, $X_2(\alpha\ket{000}+\beta\ket{111})=\alpha\ket{010}+\beta\ket{101}$. Both basis components have syndrome $11$. Measuring the checks therefore reveals the error location while leaving $\alpha$ and $\beta$ untouched. Applying $X_2$ restores the original state.
+
+The parity $Z_1Z_2$ can be measured by preparing an ancilla in $\ket0$, applying controlled-NOT gates from data qubits one and two to that ancilla, and measuring the ancilla in $Z$. The ancilla ends in the binary parity of the data basis labels. Since $000$ and $111$ both have even parity on this pair, it does not distinguish the logical basis states. Directly measuring the first data qubit would distinguish them and destroy the superposition. The circuit implements a collective observable rather than an indirect way of reading individual data bits.
+
+Now let a small coherent rotation act on qubit two:
+
+$$
+e^{-i\theta X_2/2}\ket{\psi_L}
+=\cos(\theta/2)\ket{\psi_L}-i\sin(\theta/2)X_2\ket{\psi_L}.
+$$
+
+Syndrome measurement projects onto one of two orthogonal error subspaces. Syndrome $00$ occurs with probability $\cos^2(\theta/2)$ and syndrome $11$ with probability $\sin^2(\theta/2)$. In either branch the appropriate correction restores $\ket{\psi_L}$. A continuous angle has been handled by a discrete syndrome. This is not an approximation for this specified error set.
+
+The code does not protect an arbitrary qubit error. $Z_1$ maps $\alpha\ket{000}+\beta\ket{111}$ to $\alpha\ket{000}-\beta\ket{111}$ and commutes with both checks. It is an undetected logical phase error of weight one. Thus the quantum distance of this code is one, even though it corrects one bit flip. A noise-specific correction capability should not be confused with distance against arbitrary Pauli errors.
+
+Applying $H$ to every physical qubit exchanges $X$ and $Z$. The resulting phase repetition code has basis $\ket{+++},\ket{---}$, checks $X_1X_2,X_2X_3$, and corrects any one $Z$ error. A full quantum code must arrange protection in both complementary bases without trying to measure two anticommuting observables on the same logical degree of freedom.
+
+## The Knill–Laflamme condition {#sec-knill-laflamme}
+
+Let $\mathcal N(\rho)=\sum_aE_a\rho E_a^\dagger$. There exists a perfect recovery on the code precisely when
+
+$$
+PE_a^\dagger E_bP=c_{ab}P
+\quad\text{for every }a,b,
+$$ {#eq-qec-kl}
+
+where $c$ is a positive semidefinite matrix independent of the logical state. This is the Knill–Laflamme condition [@knill1997]. In an orthonormal logical basis $\ket{i_L}$ it says
+
+$$
+\bra{i_L}E_a^\dagger E_b\ket{j_L}=c_{ab}\delta_{ij}.
+$$
+
+The off-diagonal logical matrix elements vanish, so distinct logical states do not become confusable. The diagonal elements do not depend on $i$, so the error process cannot learn which logical state was encoded. Both requirements are necessary for preserving superpositions.
+
+### Necessity: recovery cannot reconstruct leaked information
+
+Suppose a recovery has Kraus operators $R_r$ and perfectly restores every pure code state. Then
+
+$$
+\sum_{r,a} R_rE_a\ket\psi\bra\psi E_a^\dagger R_r^\dagger
+=\ket\psi\bra\psi.
+$$
+
+Every summand is positive. A sum of positive rank-one operators can have support only along $\ket\psi$ if every vector $R_rE_a\ket\psi$ is parallel to $\ket\psi$. Therefore $R_rE_a\ket\psi=\lambda_{ra}(\psi)\ket\psi$. Apply this to two independent code vectors and their sum. Linearity forces the two scalar coefficients to be equal; otherwise the sum would not be parallel to itself. Thus
+
+$$
+R_rE_aP=\lambda_{ra}P
+$$
+
+with coefficients independent of $\ket\psi$. Using trace preservation of recovery,
+
+$$
+PE_a^\dagger E_bP
+=\sum_r PE_a^\dagger R_r^\dagger R_rE_bP
+=\sum_r\lambda_{ra}^*\lambda_{rb}P.
+$$
+
+This is @eq-qec-kl with $c_{ab}=\sum_r\lambda_{ra}^*\lambda_{rb}$. Positivity of $c$ is immediate because it is a Gram matrix. The argument uses exact recovery on every state; protecting a selected set of basis states would not force the same condition.
+
+### Sufficiency: construct orthogonal error sectors
+
+Diagonalize $c$ and use the corresponding unitary mixing of Kraus operators to obtain a new representation $F_\alpha$ with
+
+$$
+PF_\alpha^\dagger F_\beta P=d_\alpha\delta_{\alpha\beta}P,
+\qquad d_\alpha\ge0.
+$$
+
+For $d_\alpha>0$, define $V_\alpha P=F_\alpha P/\sqrt{d_\alpha}$. Each $V_\alpha$ is an isometry from the code, because $PV_\alpha^\dagger V_\alpha P=P$. Distinct images are orthogonal because $PV_\alpha^\dagger V_\beta P=0$. Terms with $d_\alpha=0$ annihilate the code and can be omitted. The channel on an encoded state becomes
+
+$$
+\mathcal N(\rho)=\sum_\alpha d_\alpha V_\alpha\rho V_\alpha^\dagger,
+\qquad \sum_\alpha d_\alpha=1.
+$$
+
+Measure the orthogonal projectors onto the image subspaces $V_\alpha\mathcal C$, then apply the inverse isometry $V_\alpha^\dagger$ on the observed image. The result is $\rho$ in every branch. Extend the map arbitrarily on the orthogonal complement, for example by replacing that component with a fixed code state, so that recovery is trace preserving on the full physical Hilbert space. This explicitly constructs a valid recovery and proves sufficiency.
+
+### The environment interpretation
+
+For an input $\rho$ supported in the code, the environment state after a dilation of the noise has matrix elements
+
+$$
+(\rho_E)_{ab}=\operatorname{tr}(E_b^\dagger E_a\rho)=c_{ba}.
+$$
+
+It is independent of the logical input. The environment may learn which error sector occurred, but it learns no logical information. This gives a useful diagnostic for proposed protection schemes: if an uncontrolled environment can distinguish the encoded states, exact recovery from the system alone is impossible. In approximate QEC, small departures from this decoupling condition replace exact equality, and recovery errors must be quantified rather than assumed to vanish.
+
+## Why correcting a basis of errors is enough
+
+Suppose @eq-qec-kl holds for operators $E_a$. For linear combinations $A_\mu=\sum_a\alpha_{\mu a}E_a$,
+
+$$
+PA_\mu^\dagger A_\nu P
+=\sum_{a,b}\alpha_{\mu a}^*\alpha_{\nu b}c_{ab}P.
+$$
+
+The condition holds for their span. Because $I,X,Y,Z$ span every single-qubit operator, a code correcting these Pauli errors on every one-qubit support corrects any channel whose Kraus operators lie in their span. In particular it corrects arbitrary interaction of one unknown physical qubit with an environment, even if the resulting error is coherent or nonunitary.
+
+For up to $t$ affected qubits, tensor-product Paulis of weight at most $t$ span all operators supported on such subsets. It is therefore sufficient to correct that finite set. The condition involves products $E_a^\dagger E_b$, whose weights can be as large as $2t$. This explains the appearance of $2t+1$ in the distance criterion.
+
+There are two caveats. First, a realistic many-qubit channel may contain terms on more than $t$ qubits, so the theorem gives a guarantee only for the specified part of the error algebra. Second, the theorem does not license replacing coherent noise by a stochastic Pauli channel when evaluating the residual failure. Different uncorrectable components may interfere coherently after syndrome measurement. A spanning argument proves correction of a subspace of operators; it is not a general stochastic-noise approximation.
+
+## The nine-qubit Shor code {#sec-shor-code}
+
+Define normalized GHZ states $\ket{g_\pm}=(\ket{000}\pm\ket{111})/\sqrt2$ and encode
+
+$$
+\ket{0_L}=\ket{g_+}^{\otimes3},
+\qquad
+\ket{1_L}=\ket{g_-}^{\otimes3}.
+$$ {#eq-qec-shor-states}
+
+This concatenates a phase repetition code with three bit repetition blocks. Qubits $1,2,3$ form block one, $4,5,6$ block two, and $7,8,9$ block three. Shor's construction demonstrated that arbitrary single-qubit decoherence could be corrected in an encoded quantum memory [@shor1995].
+
+The following eight commuting observables have eigenvalue $+1$ on both logical states:
+
+$$
+\begin{aligned}
+&Z_1Z_2,\ Z_2Z_3,\ Z_4Z_5,\ Z_5Z_6,\ Z_7Z_8,\ Z_8Z_9,\\
+&X_1X_2X_3X_4X_5X_6,\quad
+X_4X_5X_6X_7X_8X_9.
+\end{aligned}
+$$ {#eq-qec-shor-checks}
+
+The first six identify a single $X$ component inside its three-qubit block. The last two compare the $XXX$ eigenvalues of adjacent blocks. A $Z_i$ error reverses that eigenvalue in its block; the last two checks identify the affected block exactly as a repetition-code syndrome identifies a bit.
+
+One need not identify which of the three qubits in the block had the phase error. Within block one, for example,
+
+$$
+Z_1\ket{\psi_L}=Z_2\ket{\psi_L}=Z_3\ket{\psi_L},
+$$
+
+because $Z_1Z_2$ and $Z_2Z_3$ act as identity on every code state. Any one of $Z_1,Z_2,Z_3$ is a valid phase correction. This is **degeneracy**: distinct physical errors have the same action on the code. Demanding a unique microscopic error label would solve a harder problem than the memory requires.
+
+A single $Y_i=iX_iZ_i$ has both a bit and phase component. The six inner checks identify its bit location, and the two outer checks identify its phase block. Applying the corresponding $X$ and $Z$ corrections restores the state up to an irrelevant global phase. Thus every single-qubit Pauli error is correctable, and the spanning argument gives correction of arbitrary single-qubit noise.
+
+For a more structural verification, any weight-two Pauli either anticommutes with at least one check or, when it is a same-block $ZZ$ pair, acts as a product of the written $ZZ$ checks. In the former case its projection $PAP$ vanishes; in the latter it is proportional to $P$. These are exactly the alternatives needed for products of single-qubit errors in @eq-qec-kl.
+
+The operators
+
+$$
+\overline X=Z_1Z_4Z_7,
+\qquad \overline Z=X_1X_2X_3
+$$
+
+act as logical $X$ and $Z$ for the basis in @eq-qec-shor-states. The first flips the sign of all three GHZ blocks and swaps $\ket{0_L},\ket{1_L}$. The second has eigenvalue $+1$ on the first logical state and $-1$ on the second. They have weight three, commute with every check, and anticommute with one another. Together with single-error correctability, this establishes parameters $[[9,1,3]]$.
+
+Under independent physical Pauli faults of total probability $p$ per qubit and ideal recovery, failure is possible only when at least two faults occur. Consequently
+
+$$
+p_L\le1-(1-p)^9-9p(1-p)^8=36p^2+O(p^3).
+$$
+
+This is an upper bound, not an equality: some multiple-fault patterns act trivially or are corrected successfully. The conclusion also does not include faults in the syndrome circuit. Increasing block size while using a fragile circuit can increase the probability that one ancilla fault propagates to several data qubits. Fault tolerance controls that propagation.
+
+## Distance, degeneracy, and finite resources
+
+For a general subspace code, an operator is detectable when $PEP$ is proportional to $P$. The **distance** is the minimum Pauli weight for which this fails. A distance-$d$ code corrects arbitrary errors on up to $\lfloor(d-1)/2\rfloor$ unknown qubits and arbitrary erasure of up to $d-1$ known qubits. The proof applies @eq-qec-kl to products of errors supported on the relevant sites.
+
+If all the correctable Pauli errors produce mutually orthogonal $2^k$-dimensional images, a dimension count gives the nondegenerate quantum Hamming bound,
+
+$$
+2^k\sum_{j=0}^t3^j\binom nj\le2^n.
+$$ {#eq-qec-hamming-bound}
+
+There are three nonidentity Paulis per affected qubit. Degenerate codes need not assign an orthogonal image to each of these labels, so this particular counting proof does not apply to them. One must state the nondegeneracy assumption when invoking the bound.
+
+The quantum Singleton bound $n-k\ge2(d-1)$ applies more generally to subspace codes. Its factor of two reflects the need to protect complementary quantum information, rather than merely duplicate a classical label. It is not obtained by replacing the classical alphabet size in the classical Singleton bound. The erasure-based entropy argument in the final exercise makes the quantum restriction explicit.
+
+A code is only part of a working memory. One must also choose how to prepare it, measure checks, decode data, and implement logical operations. The next chapter gives an algebraic language that makes these choices tractable and exposes the logical equivalence classes that modern decoders must learn.
+
+## Exercises with worked solutions
+
+### Exercise 1: measurement preserves a logical superposition
+
+Write the projectors for the two checks of the bit repetition code. Apply the syndrome-$11$ projector to $X_2\ket{\psi_L}$ and to $\ket{\psi_L}$. Explain why the outcome probability contains no information about $\alpha,\beta$.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+For syndrome $s$, $\Pi_s=\frac14[I+(-1)^{s_1}Z_1Z_2][I+(-1)^{s_2}Z_2Z_3]$. Since $X_2$ anticommutes with each check, $\Pi_{11}X_2\ket{\psi_L}=X_2\ket{\psi_L}$ and $\Pi_{11}\ket{\psi_L}=0$. For a definite $X_2$ error the outcome is certain for every normalized logical input. For a coherent superposition $aI+bX_2$, it occurs with probability $|b|^2$, independently of the encoded amplitudes.
+:::
+
+### Exercise 2: why a phase error is uncorrectable
+
+Test the error set $\{I,Z_1\}$ against the bit repetition code using the Knill–Laflamme condition. Is the absence of a nonzero syndrome by itself a sufficient argument?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+In the logical basis, $PZ_1P=\ket{0_L}\bra{0_L}-\ket{1_L}\bra{1_L}$, which is not a scalar multiple of $P$. Thus the cross term between $I$ and $Z_1$ violates the condition. A zero syndrome alone would not prove failure: stabilizer errors can have zero syndrome and act trivially. The relevant question is whether the undetected action is scalar on the entire code.
+:::
+
+### Exercise 3: damping lies in a correctable span
+
+Express the amplitude-damping Kraus operators from @sec-quantum-channels in the Pauli basis. Explain what follows for damping of one specified but otherwise arbitrary physical qubit in the Shor code. Does the conclusion cover simultaneous damping of all nine qubits?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+Writing $r=\sqrt{1-\gamma}$ gives $E_0=\frac{1+r}{2}I+\frac{1-r}{2}Z$ and $E_1=\frac{\sqrt\gamma}{2}(X+iY)$. They lie in the single-qubit Pauli span, so perfect Shor-code recovery corrects this one-qubit damping channel for every $0\le\gamma\le1$. If damping acts on every qubit, tensor products of these operators include high-weight terms outside the guaranteed correctable span. Small $\gamma$ may allow approximate suppression, but exact correction of the full product channel does not follow.
+:::
+
+### Exercise 4: degeneracy in the Shor code
+
+Suppose a $Z_2$ error occurs and the decoder applies $Z_1$. Find the residual operator and prove that recovery succeeds for every logical state. Contrast this with applying $Z_4$ instead.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The first residual is $Z_1Z_2$, one of the checks, and hence acts as identity on the code. The second residual is $Z_2Z_4$, which flips GHZ signs in blocks one and two without flipping block three. It is not a code-preserving logical correction and leaves a nonzero outer-check syndrome. A decoder is allowed to confuse errors within the same degenerate class, but not arbitrary errors with the same Pauli type.
+:::
+
+### Exercise 5: derive the quantum Singleton bound
+
+An encoded half of a maximally entangled state has reference $R$ with entropy $S(R)=k$, in bits. Partition the physical qubits into $A,B,C$, with $|A|=|B|=d-1$; assume $n\ge2(d-1)$. Erasure correction implies $R$ is uncorrelated with $A$ and with $B$. Use purity and entropy subadditivity to prove $k\le|C|$.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The joint state $RABC$ is pure. Decoupling gives $S(RA)=S(R)+S(A)$ and $S(RB)=S(R)+S(B)$. Purity gives $S(RA)=S(BC)\le S(B)+S(C)$ and $S(RB)=S(AC)\le S(A)+S(C)$. Add the inequalities and cancel $S(A)+S(B)$ to obtain $2S(R)\le2S(C)\le2|C|$. Since $|C|=n-2(d-1)$, $n-k\ge2(d-1)$. To justify the admissible partition, suppose instead that $n<2(d-1)$. Split all physical qubits into two disjoint sets, each of size at most $d-1$. Either set could be erased, so the other alone could reconstruct the unknown logical input. Applying the two local recovery maps would produce two copies, contradicting no-cloning for $k>0$. Thus a nontrivial code cannot inhabit that excluded regime.
+:::

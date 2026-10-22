@@ -1,0 +1,198 @@
+# Fault tolerance and realistic noise {#sec-fault-tolerance}
+
+## Correcting errors while introducing errors
+
+An ideal correction map is a mathematical operation on an encoded state. A physical correction cycle is a circuit made of preparation, gates, waiting, measurement, reset, and classical processing. Every step can fail. A useful code must therefore protect information while the apparatus is trying to learn where errors occurred. This feedback problem is fault tolerance.
+
+The distinction changes decoding. With perfect measurements, a syndrome is a set of parity constraints on data errors. With imperfect measurements, a nonzero syndrome may be a data fault, a measurement fault, leakage, or a correlated sequence. Repeated checks create a history from which the decoder must infer the net logical effect. A learned decoder that sees only a final syndrome cannot recover information that its input has discarded.
+
+This chapter constructs the relevant noise descriptions, derives detector events, explains fault propagation, and connects a decoder to a functioning logical computer.
+
+## Pauli noise and its conventions {#sec-pauli-conventions}
+
+A one-qubit stochastic Pauli channel is
+
+$$
+\mathcal E(\rho)=p_I\rho+p_XX\rho X+p_YY\rho Y+p_ZZ\rho Z,
+\quad \sum_Pp_P=1.
+$$ {#eq-ft-pauli}
+
+In the convention used here, depolarizing probability $p$ means $p_X=p_Y=p_Z=p/3$ and $p_I=1-p$. Another common convention writes $(1-q)\rho+qI/2$, corresponding to $p=3q/4$. Thresholds expressed in these two parameters differ by a factor even when the channels are identical.
+
+Represent a Pauli by bits $(x,z)$ with $X=(1,0)$, $Z=(0,1)$, and $Y=(1,1)$, ignoring phase. Under depolarization,
+
+$$
+P(x=1)=P(z=1)=\frac{2p}{3},\qquad P(x=z=1)=\frac p3.
+$$
+
+Thus $X$- and $Z$-component errors are correlated. Replacing the joint distribution by independent marginals changes the model. The discrepancy matters for joint decoders and for comparisons between separate CSS decoding and a neural network that uses both check types.
+
+Biased dephasing can be parameterized by $\eta=p_Z/(p_X+p_Y)$. A bias-aware code or decoder exploits this asymmetry. A bias-preserving idle channel does not imply bias-preserving two-qubit gates. Always specify the channel at each circuit location.
+
+## Relaxation and dephasing from physical timescales
+
+Amplitude damping over a duration $\Delta t$ has Kraus operators
+
+$$
+K_0=\begin{pmatrix}1&0\\0&\sqrt{1-\gamma}\end{pmatrix},\qquad
+K_1=\begin{pmatrix}0&\sqrt\gamma\\0&0\end{pmatrix},\quad
+\gamma=1-e^{-\Delta t/T_1}.
+$$
+
+For $\rho=\tfrac12(I+r_xX+r_yY+r_zZ)$, this gives
+
+$$
+(r_x,r_y,r_z)\mapsto
+(\sqrt{1-\gamma}r_x,\sqrt{1-\gamma}r_y,(1-\gamma)r_z+\gamma).
+$$ {#eq-ft-damping-bloch}
+
+The affine shift toward $\ket0$ makes damping nonunital: $\mathcal E(I)\ne I$. A stochastic Pauli channel is unital, so no Pauli model reproduces this map exactly.
+
+A Pauli twirl removes off-diagonal Pauli-transfer terms. The diagonal contraction factors of damping are $\lambda_X=\lambda_Y=\sqrt{1-\gamma}$ and $\lambda_Z=1-\gamma$. Solving $\lambda_X=1-2(p_Y+p_Z)$ and its cyclic versions yields
+
+$$
+p_X=p_Y=\frac\gamma4,\qquad
+p_Z=\frac{2-\gamma-2\sqrt{1-\gamma}}4.
+$$ {#eq-ft-damping-twirl}
+
+The twirl matches those diagonal contractions while discarding the shift. For small $\gamma$, $p_Z=\gamma^2/16+O(\gamma^3)$. Treating all relaxation as a $Z$ error has the wrong physical structure.
+
+Pure dephasing with coherence factor $e^{-\Delta t/T_\phi}$ is exactly a stochastic $Z$ channel with probability $(1-e^{-\Delta t/T_\phi})/2$. Combining independent relaxation and dephasing gives $T_2^{-1}=(2T_1)^{-1}+T_\phi^{-1}$. These formulas assume a Markovian exponential model and stationary parameters. Low-frequency drift, driven gates, and correlated control noise require richer descriptions.
+
+## Coherent errors and the limits of twirling
+
+A calibration error may implement $U_\theta=e^{-i\theta Z/2}$ instead of identity. Expanding,
+
+$$
+U_\theta=\cos(\theta/2)I-i\sin(\theta/2)Z.
+$$
+
+Its Pauli twirl is a $Z$ channel with $p_Z=\sin^2(\theta/2)$. Yet $N$ identical rotations accumulate to $U_{N\theta}$, whereas independent stochastic errors accumulate probabilistically. For a $\ket+$ input, a final $X$ measurement has error $\sin^2(N\theta/2)$ in the coherent case. At small $N\theta$, this is quadratic in $N$, unlike the leading $Np_Z$ stochastic prediction.
+
+Syndrome measurements remove some coherences by distinguishing error subspaces, but errors sharing a syndrome can still interfere. A classical posterior over Pauli errors is exact only for an appropriate stochastic-Pauli description, not for arbitrary coherent channels. Randomized compiling physically inserts tracked random operations to tailor effective noise under specified assumptions [@WallmanEmerson2016]. An analytic twirl in a simulation and an implemented randomization protocol are different operations.
+
+## Fault propagation through syndrome circuits {#sec-hook-errors}
+
+Conjugating Paulis by a CNOT with control $c$ and target $t$ gives
+
+$$
+X_c\mapsto X_cX_t,\quad Z_c\mapsto Z_c,\quad
+X_t\mapsto X_t,\quad Z_t\mapsto Z_cZ_t.
+$$ {#eq-ft-cnot}
+
+Derive the first relation by applying CNOT, $X_c$, and inverse CNOT to $\ket{a,b}$: flipping the control also changes the target's conditional flip. The remaining relations follow similarly, or from their action on computational-basis phases.
+
+To measure $Z_1Z_2Z_3Z_4$, prepare an ancilla in $\ket0$, use data controls and ancilla target, then measure ancilla $Z$. A $Z$ fault on that ancilla between CNOTs propagates backward to later data controls. One physical fault can produce a multi-qubit data error. To measure an $X$ product, use a $\ket+$ control ancilla and data targets; an ancilla $X$ fault can spread.
+
+These **hook errors** explain why interaction order matters. A schedule can orient likely correlated pairs away from the shortest logical direction, preserving effective distance. A distance-three code coupled to a careless check circuit can fail from one fault even though the abstract code corrects any single data-qubit Pauli. Verified cat ancillas, flag qubits, and fault-tolerant schedules address this problem with different overheads. A flag announces potentially dangerous propagation; the decoder must receive the flag outcome and change its candidate set or prior.
+
+## From measurements to detectors {#sec-detector-history}
+
+Let $m_{a,t}\in\{0,1\}$ be the measured eigenvalue bit of check $a$ in round $t$. In a memory experiment with fixed stabilizers, define
+
+$$
+d_{a,t}=m_{a,t}\oplus m_{a,t-1}.
+$$ {#eq-ft-detectors}
+
+In an ideal history the check value stays constant, so this parity is deterministic. A data fault between rounds flips certain future check values, creating detector events at its spatial endpoints in that time interval. A measurement bit flip changes $m_{a,t}$ alone and therefore flips $d_{a,t}$ and $d_{a,t+1}$: a pair separated in time. This is why noisy-syndrome decoding is naturally a space-time problem.
+
+The first and last rounds need physical boundary conditions. An initial check value is known only if initialization prepares it deterministically. Final destructive data readout can supply another parity relation. Simply setting a nonexistent $m_{a,0}$ to zero for every check can introduce fictitious defects. For changing codes and logical gates, detectors are general products of measurement outcomes that are deterministic in the noiseless circuit; adjacent differences are only a special case.
+
+For independent binary fault mechanisms $f\in\mathbb F_2^M$, a detector error model contains maps
+
+$$
+d=Df,\qquad o=Lf,
+$$ {#eq-ft-dem}
+
+where $o$ records flips of specified logical observables. A decoder predicts $\hat o(d)$ or a compatible fault estimate $\hat f$. Logical failure is $\hat o\ne o$, not necessarily $\hat f\ne f$. If every fault creates at most two detectors, $D$ defines an ordinary matching graph. More-detector faults create hyperedges; splitting them into graph edges can discard correlations. Mutually exclusive Pauli outcomes of one gate also need care before being represented as independent mechanisms.
+
+![A data fault connects space-like detector events; a measurement fault connects events in time. The diagram shows one check coordinate of a larger decoding graph.](figs/detector-history){#fig-detector-history}
+
+## Three noise levels that must not be conflated
+
+**Code capacity:** data faults occur once, followed by perfect syndrome information. This isolates the code and decoder, often with independent Pauli errors. **Phenomenological noise:** data faults and abstract check-outcome flips occur repeatedly, but no extraction gates are simulated. **Circuit-level noise:** faults occur at gates, idles, measurements, resets, and preparation, then propagate through the actual schedule.
+
+Circuit-level thresholds depend on gate durations and error conventions. An idle lasting ten times longer than a gate may require a different channel. A two-qubit depolarizing fault typically distributes probability over 15 nonidentity two-qubit Paulis, not two independent one-qubit depolarizations. Measurement error may include assignment asymmetry and analog outcomes. A readout voltage contains more information than its hard-thresholded bit: if conditional voltage densities are $p(v|0)$ and $p(v|1)$, its log-likelihood ratio is $\log[p(v|0)/p(v|1)]$. A decoder can incorporate this soft information directly.
+
+## Leakage, loss, erasures, and correlated bursts
+
+Leakage occupies a physical level outside the computational subspace. It may persist for several rounds and alter later gates. A two-state Pauli simulator cannot represent that hidden level merely by adding independent flips. Leakage-reduction units, reset, or transport can remove it; a hidden-state noise model can track its persistence. Realistic training should include the removal protocol and any available leakage flags.
+
+An **erasure** is an error with a known location. If a region $A$ supports no nontrivial logical operator, erasures on $A$ are correctable. A distance-$d$ code can correct any $d-1$ erased qubits, compared with only $\lfloor(d-1)/2\rfloor$ arbitrary unknown-location errors. The difference is information: erasure flags reduce the possible supports. Wu and collaborators proposed converting dominant errors into erasures for alkaline-earth Rydberg atoms, with benefits quantified under a specified circuit model [@WuEtAl2022]. The conversion efficiency and extra measurement costs are hardware-dependent.
+
+Spatially correlated radiation events or shared-control faults can generate high-weight errors with probabilities that do not scale as independent single-qubit rates. A fit $p_L\propto p^{(d+1)/2}$ can then develop a floor. No decoder can distinguish an identity event from an unflagged logical event with certainty when their measured histories are identical. Its best decision is limited by the posterior probabilities of the logical classes. Additional observables, altered hardware, or a different code may be required.
+
+Bosonic encodings provide a complementary route: a harmonic oscillator supplies a large Hilbert space within one physical mode. Cat codes use separated coherent-state components; Gottesman–Kitaev–Preskill codes encode using a phase-space lattice [@GottesmanKitaevPreskill2001]. Oscillator loss, finite squeezing, and analog syndrome information differ from a qubit Pauli model. A useful hierarchy is an inner bosonic decoder producing calibrated soft information for an outer qubit code. This book develops qubit stabilizer decoding in detail; these oscillator examples explain why its modeling assumptions must be explicit rather than universal.
+
+## What a threshold theorem actually asserts {#sec-threshold-theorem}
+
+For a distance-three concatenated code and a suitable fault-tolerant gadget, one fault must not cause logical failure. Logical failure begins with malignant pairs of faults. If $A$ bounds their count and $p$ is a compatible local stochastic fault strength, a schematic recursion is
+
+$$
+p_{j+1}\leq A p_j^2,\qquad
+p_j\leq\frac1A(Ap)^{2^j}.
+$$ {#eq-ft-recursion}
+
+Below $1/A$, logical error decreases doubly exponentially in concatenation level. To simulate $G$ logical locations with total failure at most $\epsilon$, a union bound asks for $Gp_j\leq\epsilon$. Hence $2^j$ need only grow like $\log(G/\epsilon)$, giving polylogarithmic resource overhead for suitable gadgets. This calculation explains the mechanism, but it is not a rigorous threshold proof: overlapping extended rectangles, incoming errors, and correlations require careful definitions. Aliferis, Gottesman, and Preskill supplied such a framework for concatenated distance-three codes [@AliferisGottesmanPreskill2006].
+
+For local stochastic noise, one often assumes that for every set of $r$ locations, the probability all are faulty is at most $p^r$. This allows some correlations while controlling dangerous high-weight events. Arbitrarily strong global faults violate the hypothesis. A threshold theorem is conditional on a noise class, available operations, and a fault-tolerant construction. A finite-distance crossing observed in Monte Carlo is a numerical estimate for another specified setting, not a proof of that theorem.
+
+## Logical gates and the classical feedback path
+
+A transversal gate acts separately on corresponding physical qubits of code blocks, limiting error propagation within a block. Stabilizer codes may support useful transversal Clifford gates, but a finite-dimensional code that detects arbitrary single-subsystem errors cannot have a universal transversal unitary gate set [@EastinKnill2009]. Universality therefore uses additional structure such as magic-state injection and distillation, code switching, or other fault-tolerant gate constructions.
+
+Clifford conjugation maps a Pauli frame to another Pauli frame. A frame is a classical record of the correction that would have been applied, so one can often avoid physical correction gates. For example a pending $X$ before $H$ becomes a pending $Z$ after $H$. At a non-Clifford gate, the pending correction may affect which operation or measurement basis is needed. In particular $TXT^\dagger$ is not a Pauli. This creates a reaction deadline even if Clifford-memory decoding can lag.
+
+Magic-state distillation consumes noisy ancillary states and uses error-detecting circuits to produce fewer cleaner states under stated input-noise assumptions [@BravyiKitaev2005]. Distillation factories, routing, and logical measurements contribute substantially to resource cost. A memory decoder benchmark omits these operations.
+
+Lattice surgery measures joint logical parities by temporarily changing stabilizers near code boundaries [@HorsmanEtAl2012]. If commuting new checks multiply to $\bar Z_A\bar Z_B$, their suitably processed outcomes reveal that logical parity while preserving individual encoded states up to the intended projection. Repeated measurements suppress readout errors. A decoder must know the changing check schedule and the correlation between parity outcomes, incoming frames, and outgoing logical observables. An unchanging-lattice classifier may fail even at the same distance.
+
+Single-shot error correction uses redundancy in a suitable measurement structure so one round can tolerate measurement faults in a controlled residual-noise sense [@Bombin2015]. It does not mean every surface-code check needs to be measured only once, or that the output state is exactly error-free. Geometry, confinement or redundancy properties, and residual-noise guarantees determine applicability.
+
+## Worked example: a noisy repetition-code history
+
+Take data bits $q_1,q_2,q_3$ and checks $Z_1Z_2,Z_2Z_3$, initialized to $+1$. In round one both measurements return $(0,0)$. Between rounds one and two an $X_2$ fault occurs, so round two returns $(1,1)$. Suppose the first check's measurement is also flipped in round two; the recorded outcome is $(0,1)$. In round three the underlying data error persists but readout is correct, giving $(1,1)$.
+
+The detector sequence is $(0,0)$, $(0,1)$, $(1,0)$. The measurement fault produced an extra pair on check one in rounds two and three. Combining it with the two endpoints of the data fault canceled one round-two detector. A decoder sees only the remaining pattern and uses likelihoods to choose among compatible histories. Looking only at round two would incorrectly favor a single data-edge endpoint explanation. An exact history decoder sums all compatible fault mechanisms for each final logical class.
+
+## Exercises and worked solutions
+
+### Exercise 1: A channel-convention conversion
+
+A paper writes $\mathcal E(\rho)=0.99\rho+0.01I/2$. What is the nonidentity Pauli probability in this chapter's convention? What are the two component error marginals?
+
+::: {.callout-note collapse="true"}
+## Solution
+
+$p=3(0.01)/4=0.0075$, and each of $X,Y,Z$ occurs with probability $0.0025$. Both $x$ and $z$ have marginal $0.005$; their joint probability is $0.0025$, far larger than the independent product $0.000025$. The event that no Pauli is applied has probability $0.9925$.
+:::
+
+### Exercise 2: Ancilla propagation
+
+In the four-data-qubit $Z$ check described above, a $Z$ fault hits the target ancilla after its second CNOT. Which data errors can it create before readout?
+
+::: {.callout-note collapse="true"}
+## Solution
+
+The remaining CNOTs propagate ancilla $Z$ to data controls three and four. The effective error includes $Z_3Z_4$ and the ancilla $Z$. The latter commutes with its final $Z$ measurement, so a faulty data pair can arise without a flipped check outcome. Whether the pair is dangerous depends on the surrounding code and schedule.
+:::
+
+### Exercise 3: The throughput/latency distinction
+
+A processor outputs one syndrome round every $1\,\mu\mathrm{s}$. A pipelined decoder accepts a round every $0.8\,\mu\mathrm{s}$ but returns a frame $50\,\mu\mathrm{s}$ later. Is it real time? Can it always supply a decision within ten cycles?
+
+::: {.callout-note collapse="true"}
+## Solution
+
+Its sustained service rate can exceed the generation rate, so it can process a memory stream without an unbounded backlog under the stated workload. Its latency exceeds ten cycles, so it cannot satisfy a ten-cycle feed-forward deadline. Buffering and scheduling can make some algorithms tolerate that latency; they cannot redefine the deadline of an operation that actually needs the result.
+:::
+
+### Exercise 4: A coherent counterexample
+
+For $N=10$ repeated $Z$ rotations of angle $\theta=0.01$, compare the $X$-measurement error of an initial $\ket+$ with the result of applying the Pauli-twirled channel independently ten times.
+
+::: {.callout-note collapse="true"}
+## Solution
+
+The coherent error is $\sin^2(0.05)\simeq2.50\times10^{-3}$. With $p=\sin^2(0.005)\simeq2.50\times10^{-5}$, the stochastic error is $[1-(1-2p)^{10}]/2\simeq2.50\times10^{-4}$. Identical single-step Pauli diagonal information does not determine the accumulated coherent dynamics.
+:::

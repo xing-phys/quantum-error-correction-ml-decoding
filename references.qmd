@@ -1,0 +1,6 @@
+# Bibliography {.unnumbered #sec-bibliography}
+
+References support the derivations, historical discussion, and research map. A preprint citation does not imply peer review. The literature audit in [Research frontiers](15-frontiers.qmd) records the search date and the limits of the synthesis.
+
+::: {#refs}
+:::

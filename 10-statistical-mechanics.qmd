@@ -1,0 +1,318 @@
+# Statistical mechanics, thresholds, and tensor networks {#sec-statistical-decoding}
+
+## Decoding is a competition between logical classes
+
+Quantum degeneracy turns decoding into a free-energy problem. The decoder is not asked which microscopic error occurred. It is asked which equivalence class of errors is most probable after the syndrome is known. This chapter derives the connection to statistical mechanics and then uses it to explain thresholds, tensor-network decoding, and the distinction between energetic and entropic inference.
+
+Assume a stabilizer code, a stochastic Pauli channel, and an ideal syndrome measurement for the moment. Let $\mathcal S$ be the stabilizer group with physically irrelevant overall phases removed. Choose one reference Pauli $E_s$ with syndrome $s$. Every Pauli with that syndrome can be written
+
+$$
+E=E_sLS,\qquad S\in\mathcal S,
+$$
+
+where $L$ ranges over the $4^k$ logical Pauli classes. Define the unnormalized class likelihood
+
+$$
+Z_L(s)=\sum_{S\in\mathcal S}P(E_sLS).
+$$ {#eq-statmech-coset-partition}
+
+The syndrome probability is $P(s)=\sum_LZ_L(s)$, and Bayes' rule gives $P(L\mid s)=Z_L(s)/P(s)$. The optimal logical decision is
+
+$$
+\hat L(s)=\operatorname*{arg\,max}_L Z_L(s).
+$$ {#eq-statmech-degenerate-ml}
+
+For Pauli noise and the usual logical-error success criterion, this minimizes average failure probability. A recovery can apply a representative inverse of the selected class, or update a classical Pauli frame. Choosing another reference $E_s$ merely relabels the logical classes, leaving physical predictions unchanged.
+
+Terminology varies. Some authors call the most probable individual error “maximum likelihood” and reserve **degenerate maximum likelihood** for @eq-statmech-degenerate-ml. Throughout this book, a claimed optimal logical decoder must specify whether it maximizes one representative or the entire class. A numerical matching solver can be exact for its optimization objective and still fall short of the optimal logical decoder.
+
+### A three-qubit example where the distinction changes the answer
+
+Consider the CSS code with $H_X=(1\;1\;0)$ and $H_Z=(1\;1\;1)$. Their binary inner product is zero, and there is one encoded qubit. Study $X$ errors with probabilities $p_1=p_2=0.1$, $p_3=0.15$. The syndrome-one errors split into two $X$-stabilizer classes:
+
+$$
+\mathcal C_A=\{100,010\},\qquad
+\mathcal C_B=\{001,111\}.
+$$
+
+Their probabilities are
+
+$$
+P(100)=P(010)=0.0765,\quad
+P(001)=0.1215,\quad P(111)=0.0015.
+$$
+
+The most probable individual error is $001$, but $P(\mathcal C_A)=0.153>P(\mathcal C_B)=0.123$. A class decoder chooses $\mathcal C_A$. Its conditional success probability on this syndrome is $0.153/0.276\approx0.5543$, rather than $0.123/0.276\approx0.4457$. No large lattice or thermodynamic limit is needed for entropy to matter.
+
+The code is only an illustrative small stabilizer code, not a useful high-distance memory. Its role is to isolate the inference issue. Two less probable microscopic alternatives can outweigh one more probable alternative when the former have the same logical effect.
+
+## Deriving the random-bond Ising model
+
+Consider independent $Z$ errors on a toric code, with probability $p<1/2$ per edge. Their syndrome is the boundary of the primal edge chain. Fix a reference chain $e^0$ with that syndrome. In a chosen homology class $\lambda$, every compatible chain is
+
+$$
+e=e^0+\ell_\lambda+\partial_2a,
+$$ {#eq-statmech-error-parametrization}
+
+where $a_f\in\{0,1\}$ specifies a product of face stabilizers and $\ell_\lambda$ is a logical winding representative. Let $\sigma_f=(-1)^{a_f}$ and $\tau_e=(-1)^{e^0_e+\ell_{\lambda,e}}$. Every interior edge borders two faces $f,g$, so
+
+$$
+(-1)^{e_e}=\tau_e\sigma_f\sigma_g.
+$$
+
+The local error probability can be written as a Boltzmann weight:
+
+$$
+(1-p)^{1-e_e}p^{e_e}
+=\sqrt{p(1-p)}\exp\left[K(-1)^{e_e}\right],
+\qquad
+K=\frac12\log\frac{1-p}{p}.
+$$ {#eq-statmech-nishimori-coupling}
+
+Multiplying over edges and summing over stabilizers yields
+
+$$
+Z_\lambda(s)\propto
+\sum_{\{\sigma_f\}}
+\exp\left[K\sum_{e=(f,g)}\tau_e\sigma_f\sigma_g\right].
+$$ {#eq-statmech-rbim}
+
+This is an Ising partition function with random bond signs $\tau_e$. The spins live on faces of the primal lattice, equivalently vertices of the dual lattice. A negative bond favors anti-alignment. Around a dual plaquette, the product of its bond signs equals $(-1)^{s_v}$ for the corresponding primal vertex: fired syndromes produce frustration.
+
+On a torus, flipping every spin leaves all bond products unchanged, corresponding to the single dependency among plaquette generators. The unrestricted spin sum counts each stabilizer twice. This common factor cancels when comparing logical classes. One can instead fix one spin or use an independent generator set. Forgetting this redundancy does not affect ratios here, but it does affect an attempted absolute probability normalization.
+
+Changing $\lambda$ flips bonds along an appropriate seam, equivalent to a twisted boundary condition. Logical inference compares partition functions with different global twists. A local syndrome does not determine that twist, because the distinction is exactly the remaining logical information.
+
+### The Nishimori condition
+
+Write a conventional Ising energy $\mathcal H=-J\sum_e\tau_e\sigma_f\sigma_g$, so the dimensionless coupling is $K=\beta J$. If disorder bonds are sampled from independent physical errors of rate $p$, then
+
+$$
+e^{-2\beta J}=\frac{p}{1-p}.
+$$ {#eq-statmech-nishimori-line}
+
+This is the **Nishimori relation**, named for the gauge-symmetric line studied in disordered Ising models [@nishimori1981]. It ties the inference temperature to the physical noise distribution. The temperature in this mapping is an algorithmic statistical-mechanics parameter, not the refrigerator temperature of the quantum processor. It expresses calibrated Bayesian inference: the assumed likelihood matches the channel that generated the errors.
+
+There is a small gauge-choice subtlety. A decoder's deterministic reference $e^0(s)$ is a function of the syndrome, so its bond signs need not themselves be independent random samples. In an analysis of typical decoding, one may instead use the actual sampled error as reference. That reference has independent bond disorder under the assumed channel, and the correct class becomes the untwisted sector. Changing references only permutes the sector labels and changes spins by a gauge transformation; the physical success probability is unchanged. The analytical reference is a proof device, not extra information available to the decoder.
+
+Taking $\beta\to\infty$ at fixed bond signs retains only minimum-energy configurations. That is a minimum-weight error rule for uniform noise. At the Nishimori value, all compatible configurations contribute their probabilities. Using a wrong $p$ or a wrong noise family corresponds to mismatched inference. A decoder can remain useful under mismatch, but optimality no longer follows from Bayes' rule for the actual channel.
+
+Dennis and collaborators established the relation between topological recovery and disordered statistical mechanics [@dennis2002]. Chubb and Flammia generalized this mapping to arbitrary stabilizer and subsystem codes with correlated Pauli noise, including fault-tolerant models [@chubb2021]. The derivation here provides a simple special case: for a richer channel, the local interactions and variables change, but comparing class partition functions remains the organizing principle.
+
+### Energy, entropy, and domain walls
+
+Define $F_\lambda=-\beta^{-1}\log Z_\lambda$. A class can win by containing a few very probable errors or by containing many moderately probable errors. The schematic identity $F=E-TS$ summarizes that competition, although a disordered finite system needs the actual partition function rather than a single hand-assigned entropy.
+
+For two classes,
+
+$$
+\log\frac{P(\lambda_1\mid s)}{P(\lambda_0\mid s)}
+=-\beta(F_{\lambda_1}-F_{\lambda_0}).
+$$ {#eq-statmech-free-energy-ratio}
+
+The difference is often interpreted as the free-energy cost of a domain wall or boundary twist. In a correctable ordered regime, a wrong global twist typically becomes strongly disfavored as linear size grows. Near a critical noise rate, system-spanning ambiguity survives. This explains why a phase transition can locate an optimal-decoding threshold without simulating a particular approximate decoder.
+
+That explanation should not be overstated. A threshold of a practical decoder can lie below the optimal statistical-mechanics transition. A finite-size crossing can be distorted by corrections to scaling. Under correlated, nonstationary, or coherent noise, the simple independent random-bond model may no longer apply.
+
+## What a decoding threshold means
+
+Fix a code family $\mathcal C_d$, an extraction protocol and number of rounds, a noise family $\mathcal N_p$, and a decoder family $\mathcal D_d$. Let $P_L(d,p)$ be a clearly defined logical failure probability. A useful operational threshold statement is that for $p<p_{\mathrm{th}}$, logical failure tends to zero along the specified growing family. Quantifiers and normalization matter: one encoded qubit, a growing-rate block, one memory experiment, and an indefinitely running computation are different objects.
+
+Three noise conventions appear repeatedly:
+
+| Convention | Noisy operations | What the inferred threshold addresses |
+|---|---|---|
+| Code capacity | Data errors before ideal syndrome extraction | The data code and decoder under a specified channel |
+| Phenomenological | Data faults and independent syndrome-bit faults | Repeated noisy syndrome inference without a gate-by-gate extraction model |
+| Circuit level | Preparation, gates, idle locations, measurement, and propagation | A complete chosen extraction circuit and decoder |
+
+For a circuit-level memory, one commonly takes the number of rounds proportional to distance to keep a fixed space-time aspect ratio. Holding rounds fixed while increasing $d$ can hide temporal failure mechanisms. A fault-tolerance threshold for universal computation also requires gadgets and logical operations, not only a memory experiment.
+
+Below threshold one often observes a fit such as
+
+$$
+P_L(d,p)\approx A(p)\exp[-\alpha(p)d],
+$$
+
+over an appropriate range. At very small $p$ and fixed $d$, a different expansion counts malignant fault sets and often starts near $p^{\lceil d/2\rceil}$ for a distance-preserving construction and decoder. These are different limiting procedures. A fitted exponent smaller than expected can indicate a circuit distance problem, decoder failures, or an error floor; a clean finite-distance power law is not by itself a threshold proof.
+
+### Per-round, component, and block rates
+
+If rounds fail independently with probability $q$, the probability of at least one failure in $T$ rounds is $1-(1-q)^T$. A terminal logical Pauli measurement instead records the parity of logical flips. For independent identical flip opportunities its probability is
+
+$$
+P_{\mathrm{odd}}(T)=\frac{1-(1-2q)^T}{2}.
+$$ {#eq-statmech-parity-rate}
+
+These agree to leading order when $Tq\ll1$ but differ otherwise. Report which event was measured before converting a memory failure into a per-round rate. With multiple logical qubits, block failure and per-logical failure also differ; $1-(1-q)^k$ applies only under an independent-logical-error approximation.
+
+## Finite-size scaling with uncertainty
+
+Near a continuous transition, a common scaling ansatz is
+
+$$
+P_L(d,p)=f\left((p-p_c)d^{1/\nu}\right)
++d^{-\omega}g\left((p-p_c)d^{1/\nu}\right)+\cdots.
+$$ {#eq-statmech-finite-size-scaling}
+
+The first term predicts approximate crossings at $p_c$. The correction term allows crossings to drift. The exponent $\nu$ measures how a correlation length diverges, $\xi\sim|p-p_c|^{-\nu}$, within the assumed universality class. One should not impose an equilibrium exponent on a decoder-induced transition without justification.
+
+A practical fit expands $f(x)=a_0+a_1x+a_2x^2+\cdots$ in a narrow critical region, fits counts using their binomial likelihood, and varies the fitting window and minimum included distance. The raw observation is a set of finite-size logical-failure estimates; the threshold and exponent are inferred quantities depending on the ansatz. Give statistical intervals and sensitivity to fit choices separately.
+
+For $F$ failures in $N$ independent shots, $\hat P=F/N$ has standard error approximately $\sqrt{\hat P(1-\hat P)/N}$ when counts are not tiny. Zero failures does not establish zero probability. The one-sided $95\%$ binomial upper bound is $1-0.05^{1/N}\approx3/N$. At low rates, the relative error is approximately $1/\sqrt F$, so resolving a ten-percent relative difference can require hundreds or thousands of observed failures rather than hundreds of total shots.
+
+When comparing two decoders, apply both to the same sampled faults. Record how often only the first fails and how often only the second fails. Paired information reduces uncertainty relative to unrelated sampling and reveals whether the new method repairs the old method's failures or merely exchanges them for different ones. Report training and validation noise separately for learned decoders so that a nominal threshold is not partly an artifact of test-set reuse.
+
+## Partition functions as tensor networks
+
+A **tensor** is simply an array with named indices. Multiplying tensors and summing indices that occur in two factors is a contraction. A graphical network records this bookkeeping; it does not imply that the calculation is quantum. The posterior factorization of a classical decoding problem is already almost a tensor network.
+
+For a binary parity model, define a local prior tensor $P_j(e_j)$ and a check tensor
+
+$$
+A_a(\{e_j:j\in N(a)\})
+=\mathbf1\left[\bigoplus_{j\in N(a)}e_j=s_a\right].
+$$
+
+Variable-copy tensors ensure that every occurrence of the same $e_j$ agrees. Contracting all indices gives $P(s)$. To compute a logical class, include an additional logical-parity constraint or use the stabilizer parametrization in @eq-statmech-error-parametrization. The latter directly sums only errors in that class.
+
+For independent Pauli noise and stabilizer-generator bits $a_\mu$, a general class partition function has the form
+
+$$
+Z_L=\sum_{\{a_\mu\}}\prod_{j=1}^{n}
+P_j\left(\left[E_sL\prod_\mu S_\mu^{a_\mu}\right]_j\right).
+$$ {#eq-statmech-general-tensor-network}
+
+Each qubit factor depends only on generators touching it. Bounded generator degree keeps each local tensor small, but the entire contraction can still be hard. Sparsity of factors does not imply small intermediate tensors. The relevant obstacle is connectivity across a contraction cut, closely related to graph width.
+
+The distinction between optimization and summation also appears in complexity theory. A candidate error can be checked against its syndrome in polynomial time; finding a best representative for an arbitrary input code is a hard combinatorial search. Exact degenerate decoding adds a counting problem because exponentially many stabilizer-equivalent representatives contribute. Iyer and Poulin establish hardness results for general stabilizer decoding, including the counting complexity of optimal degenerate decoding [@iyer2015]. These are worst-case statements for general inputs under the paper's reductions and formulations. They do not rule out efficient special code families, approximate decoders, typical low-noise instances, or useful hardware implementations. Conversely, a polynomial-time heuristic for one code family does not solve the general optimal-decoding problem.
+
+### Why exact contraction becomes expensive
+
+Contract a square lattice column by column. After processing half the columns, an exact boundary tensor retains $O(L)$ binary indices along the cut. It therefore contains $2^{O(L)}$ entries. Local tensors had bounded size; intermediate tensors do not. A different ordering can improve constants or exploit special structure, but cannot generally remove exponential width.
+
+Bravyi, Suchara, and Vargo showed an important special exception: exact polynomial-time maximum-likelihood decoding for a planar surface-code setting with independent bit- and phase-flip noise, using matchgate structure. Their more general decoder uses approximate matrix-product-state contraction [@bravyi2014]. This result must not be generalized to arbitrary correlated noise, arbitrary quantum LDPC graphs, or arbitrary tensor networks.
+
+## Matrix-product-state boundary contraction
+
+An order-$L$ boundary tensor $B(i_1,\ldots,i_L)$ can be represented as
+
+$$
+B(i_1,\ldots,i_L)
+=\sum_{\alpha_1,\ldots,\alpha_{L-1}}
+A^{[1]i_1}_{\alpha_1}
+A^{[2]i_2}_{\alpha_1\alpha_2}\cdots
+A^{[L]i_L}_{\alpha_{L-1}}.
+$$ {#eq-statmech-mps-boundary}
+
+The auxiliary indices $\alpha$ have maximum size $\chi$, the **bond dimension**. Storage is $O(LD\chi^2)$ for local index dimension $D$, rather than $D^L$. An exact representation may require exponential $\chi$. The approximation is to keep $\chi$ manageable.
+
+Absorbing the next lattice column applies a matrix-product operator to this boundary MPS. The temporary bond dimensions grow, and a sequence of singular-value decompositions compresses them. If a reshaped matrix has singular values $\sigma_1\ge\sigma_2\ge\cdots$, retaining the first $\chi$ minimizes the local Frobenius-norm truncation error, with squared discarded norm $\sum_{i>\chi}\sigma_i^2$. Canonical forms and sweep choices determine how that local error relates to the boundary representation.
+
+For fixed local dimensions and a standard implementation, one often quotes a cost of order $O(n\chi^3)$ and memory of order $O(L\chi^2)$, with additional factors from local tensor dimensions and contraction choices. This is an algorithm-dependent estimate, not a universal theorem for every tensor-network decoder. Circuit-level three-dimensional networks have a two-dimensional boundary and are substantially harder than a two-dimensional ideal-syndrome network.
+
+```text
+for each logical class L:
+    build local likelihood tensors for the class
+    initialize a trivial boundary MPS
+    for every lattice column in the chosen order:
+        absorb the column into the boundary
+        compress using SVD or a chosen variational sweep
+        rescale and accumulate the logarithmic normalization
+    obtain an estimate of log Z_L
+return the class with the largest estimated log Z_L
+```
+
+Rescaling is necessary because a long product of probabilities can underflow. Comparing logarithmic partition functions also makes the relevant uncertainty visible: if two classes differ by $10^{-5}$ in estimated log likelihood, a truncation error of $10^{-3}$ can change the decision even if each partition estimate appears accurate to many digits.
+
+### Convergence and decoder bias
+
+Increasing $\chi$ usually improves representation capacity, but logical error rates need not decrease monotonically on every finite sample. Approximate contractions can cross in their class ranking. A discarded singular-value norm controls a local approximation, not automatically the relative error of the final small scalar or a rigorous certificate of the winning logical class.
+
+Useful validation includes exact enumeration on tiny codes, comparing several $\chi$ values on identical shots, changing contraction direction, checking stability of log-likelihood differences, and recording how many decisions remain ambiguous. A more expensive decoder can fall back to a larger $\chi$ only on ambiguous cases, but the fallback rule contributes to latency tails.
+
+Tensor-network methods naturally exploit soft probabilities and local correlations. Their limitations depend on geometry and information flow rather than only block length. On a highly connected quantum LDPC factor graph, a planar MPS sweep may have enormous cut width. Tree decompositions, approximate elimination, block methods, or graph-specific tensor organizations may be more suitable. “Tensor network decoder” names a broad computational framework, not one complexity class.
+
+## Exact class enumeration in Julia
+
+The following small demonstration reproduces the three-qubit example and computes full class likelihoods. It requires no external packages and is a useful oracle for checking a learned or approximate decoder on tiny instances.
+
+```julia
+function error_probability(e, p)
+    prod(e[j] == 1 ? p[j] : 1-p[j] for j in eachindex(e))
+end
+
+function class_weight(reference, generators, p)
+    n, r = size(generators)
+    seen = Set{Tuple}()
+    total = 0.0
+    for mask in 0:(2^r-1)
+        a = [(mask >> (j-1)) & 1 for j in 1:r]
+        e = (reference .+ generators * a) .% 2
+        key = Tuple(e)
+        key in seen && continue # handles redundant displayed generators
+        push!(seen, key)
+        total += error_probability(e, p)
+    end
+    total
+end
+
+p = [0.1, 0.1, 0.15]
+generators = reshape([1,1,0], 3, 1)
+ZA = class_weight([1,0,0], generators, p)
+ZB = class_weight([0,0,1], generators, p)
+@assert isapprox(ZA, 0.153)
+@assert isapprox(ZB, 0.123)
+@assert error_probability([0,0,1], p) > error_probability([1,0,0], p)
+println((class_A=ZA, class_B=ZB, conditional_A=ZA/(ZA+ZB)))
+```
+
+The `seen` set removes duplicate group elements if the supplied generators are dependent. A scalable algorithm instead works with an independent generator basis or analytically divides out a known uniform redundancy. This enumeration is exponential in the generator rank. Its value is correctness and interpretability on small systems, not large-code performance.
+
+## Connections to intelligent decoders
+
+The partition-function perspective organizes many ML objectives. A classifier predicts the logical-class posterior directly. An autoregressive model approximates a distribution over compatible errors or stabilizer variables. A learned proposal distribution can guide importance sampling of a class partition sum. A neural tensor contraction can replace or guide a truncation. A learned BP decoder changes approximate marginal inference. These methods target related but distinct quantities.
+
+For importance sampling, if a proposal $q(a)>0$ wherever the target weight $w_L(a)$ is positive, then
+
+$$
+Z_L=\mathbb E_{a\sim q}\left[\frac{w_L(a)}{q(a)}\right].
+$$
+
+The estimator is unbiased before taking logarithms, but its variance can be enormous when $q$ misses important modes. A small training loss on typical samples does not guarantee accurate tails or reliable ratios between logical classes. This is one reason research decoders must report logical failure, sampling cost, calibration, and rare-event behavior alongside model accuracy.
+
+The conventional algorithms supply strong reference points. Matching isolates the value of efficient constrained optimization. BP demonstrates local approximate inference. OSD and LSD demonstrate reliability-guided exact syndrome satisfaction. Tensor networks demonstrate controlled increases in the resources devoted to a class sum. A useful learned method should say which limitation it improves and how that gain survives increasing distance, changing noise, and real-time constraints.
+
+## Exercises
+
+### Exercise: verify a class sum
+
+For the three-qubit example, compute $P(s=1)$ and the success probability of the most probable individual-error rule. Why does multiplying either representative by $110$ preserve its syndrome?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The syndrome probability is $0.0765+0.0765+0.1215+0.0015=0.276$. The individual-error rule selects $001$ and therefore the entire class $\{001,111\}$ succeeds, giving conditional success $0.123/0.276\approx0.4457$. The stabilizer support $110$ is in the kernel of $H_Z=(111)$ because its parity is even. Adding it leaves the syndrome unchanged and acts trivially on the encoded state.
+:::
+
+### Exercise: inhomogeneous Nishimori couplings
+
+Repeat the local Boltzmann-weight derivation when edge $e$ has independent error probability $p_e$. What coupling replaces $K$? Does the mapping require translation invariance?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+For each edge, $K_e=\tfrac12\log[(1-p_e)/p_e]$ and the prefactor is $\sqrt{p_e(1-p_e)}$. Their product is common to all classes. The partition function has inhomogeneous couplings $K_e\tau_e\sigma_f\sigma_g$. Translation invariance is unnecessary; independence and knowledge of the local probabilities are the relevant assumptions in this derivation. Correlated noise instead introduces higher-body or additional local factors.
+:::
+
+### Exercise: no observed failures
+
+A simulation sees zero logical failures in $100,000$ independent shots. Derive a one-sided $95\%$ upper bound and explain why reporting a logical error rate of exactly zero is misleading.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+For true probability $q$, zero failures has probability $(1-q)^{100000}$. Set this to $0.05$, obtaining $q=1-0.05^{1/100000}\approx2.996\times10^{-5}$. The experiment constrains the rate at this scale; it does not prove impossibility of failure. A plot may show an upper-limit marker rather than a point at zero.
+:::
+
+### Exercise: contraction width
+
+A square-grid binary tensor network is contracted column by column without compression. Estimate the number of entries in the boundary tensor. If an MPS keeps fixed bond dimension $\chi$, what assumption makes the method practical, and what must be checked?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+A vertical cut crosses a number of binary bonds proportional to $L$, so the exact boundary has $2^{O(L)}$ entries. The approximation assumes its correlations can be represented accurately enough with moderate $\chi$, reducing storage to $O(L\chi^2)$ for fixed local dimension. One must check convergence of the logical-class ranking, not merely storage or an isolated local truncation norm. A fixed-$\chi$ runtime bound is not an accuracy guarantee.
+:::

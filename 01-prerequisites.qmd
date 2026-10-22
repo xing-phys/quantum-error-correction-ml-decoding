@@ -1,0 +1,253 @@
+# Mathematical and physical prerequisites {#sec-prerequisites}
+
+Quantum error correction is the art of arranging information so that unwanted interactions leave a detectable trace without revealing the information itself. Decoding is the inference problem that turns this trace into a corrective action. These two tasks meet at a useful boundary: quantum mechanics determines which observations are possible; probability and algorithms determine what to infer from them. Machine learning changes the second task, but cannot remove the constraints imposed by the first.
+
+This chapter develops the language needed on both sides of that boundary. We assume familiarity with elementary complex numbers, vectors, and derivatives, but introduce binary algebra, conditional probability, density operators, and quantum channels explicitly. The examples are deliberately small enough to calculate by hand. The same equations will later describe millions of experimental measurement outcomes.
+
+## Binary vectors are physical bookkeeping {#sec-binary-algebra}
+
+A classical bit takes values in the set $\mathbb F_2=\{0,1\}$. Its addition and multiplication are ordinary integer operations followed by reduction modulo two. Thus $1+1=0$, $1+0=1$, and $1\cdot1=1$. Addition is exclusive OR: the output is one precisely when the inputs differ. This is a field because each nonzero element has a multiplicative inverse; here the only nonzero element is one, whose inverse is itself. Subtraction equals addition.
+
+Why introduce a field for a physical error? A flip applied twice restores a bit. Representing a flip by one and no flip by zero makes composition exactly addition in $\mathbb F_2$. For a register of $n$ bits, a column vector $e\in\mathbb F_2^n$ records the locations of flips. If the original register is $x$, the received register is $y=x+e$. The **Hamming weight** $|e|$ counts nonzero entries, and the Hamming distance is $d_H(x,y)=|x+y|$. These are integer counts, even though the vector arithmetic is binary.
+
+A parity is a binary sum. The condition $x_1+x_2+x_4=0$ means that an even number of the three selected bits are one. Write it as $h x=0$ with the row $h=(1,1,0,1)$. A matrix $H$ collects several such conditions. The vector $s=Hx$ is a list of parity violations, called a **syndrome**. A syndrome is generally shorter than the underlying error and therefore does not identify it uniquely.
+
+The binary inner product $u\cdot v=\sum_i u_i v_i\pmod2$ detects the parity of overlap between supports. It differs from a Euclidean inner product: $u\cdot u$ can vanish for nonzero $u$. In particular $(1,1)\cdot(1,1)=0$. Orthogonality here is an algebraic relation, not a statement about angles or lengths. This distinction will become essential for CSS quantum codes.
+
+### Gaussian elimination over $\mathbb F_2$
+
+Solving $Hx=s$ uses the same pivot logic as real Gaussian elimination. A row swap is allowed. Adding one row to another is allowed. Multiplying a row by a nonzero number does nothing because the only such number is one. Never use floating-point rank to decide a binary rank.
+
+Consider
+
+$$
+\begin{pmatrix}1&1&0&1\\0&1&1&0\\1&0&1&1\end{pmatrix}x
+=\begin{pmatrix}1\\0\\1\end{pmatrix}.
+$$
+
+Adding row one to row three gives the second row again. The third constraint is redundant. The first two equations imply $x_2=x_3$ and $x_1=1+x_3+x_4$. With free bits $a=x_3$ and $b=x_4$,
+
+$$
+x=(1,0,0,0)^T+a(1,1,1,0)^T+b(1,0,0,1)^T.
+$$
+
+There are four solutions, an **affine space**: one particular solution plus a vector space. The matrix has rank two, so its null space has dimension $4-2=2$. More generally, a consistent rank-$r$ system in $n$ variables has $2^{n-r}$ solutions. A decoder must select among these candidates using physical information beyond the parity equations.
+
+The following implementation performs exact binary elimination. It accepts a matrix of integers, uses no external packages, and returns its rank. The full reduced matrix is useful for finding null spaces and solving constrained decoding problems.
+
+```julia
+function gf2_rref(A)
+    B = Int.(A .% 2)
+    m, n = size(B)
+    pivots = Int[]
+    row = 1
+    for col in 1:n
+        row > m && break
+        p = findfirst(==(1), B[row:m, col])
+        isnothing(p) && continue
+        p = p + row - 1
+        B[row, :], B[p, :] = copy(B[p, :]), copy(B[row, :])
+        for i in 1:m
+            if i != row && B[i, col] == 1
+                B[i, :] = (B[i, :] + B[row, :]) .% 2
+            end
+        end
+        push!(pivots, col)
+        row += 1
+    end
+    return B, pivots
+end
+
+H = [1 1 0 1; 0 1 1 0; 1 0 1 1]
+R, pivots = gf2_rref(H)
+@assert length(pivots) == 2
+```
+
+Bit-packed implementations replace scalar sums by machine-word XOR operations. The mathematics is unchanged, but performance can improve substantially. This is an early example of a recurring distinction: an asymptotic algorithm and an implementation on a particular processor are separate objects of study.
+
+## Probability, evidence, and decoding {#sec-probability-bayes}
+
+A noise model assigns a probability $P(e)$ to every error pattern. For independent flips with probability $p$ on each of $n$ bits,
+
+$$
+P(e)=p^{|e|}(1-p)^{n-|e|}.
+$$ {#eq-prereq-iid}
+
+Independence is an assumption about the joint distribution. Equal single-bit error probabilities do not imply independence. A fluctuating field can give every qubit the same marginal error rate while producing strongly correlated multi-qubit events.
+
+Suppose an observation $s$ has likelihood $P(s\mid e)$. The product rule $P(e,s)=P(s\mid e)P(e)$ and the normalization $P(s)=\sum_e P(e,s)$ give Bayes' rule,
+
+$$
+P(e\mid s)=\frac{P(s\mid e)P(e)}{\sum_{e'}P(s\mid e')P(e')}.
+$$ {#eq-prereq-bayes}
+
+The prior describes errors before seeing the data; the posterior describes uncertainty after seeing it. For perfect parity measurements, $P(s\mid e)$ is one when $He=s$ and zero otherwise. A posterior is then the prior restricted to one affine space and renormalized. For noisy measurements, inconsistent errors can still have nonzero likelihood.
+
+For example, the two-bit parity $s=e_1+e_2$ is observed perfectly. At $p=0.1$, the four prior probabilities for $00,01,10,11$ are $0.81,0.09,0.09,0.01$. If $s=0$, the posterior assigns probabilities $81/82$ and $1/82$ to $00$ and $11$. If $s=1$, the two candidates have equal posterior probability. The syndrome reveals whether the number of flips is odd, but provides no evidence about which bit flipped.
+
+When the prior probabilities are unequal, likelihood and posterior optimization differ. A **maximum-likelihood** estimate of a transmitted message maximizes $P(y\mid x)$. A **maximum-a-posteriori** estimate maximizes $P(x\mid y)\propto P(y\mid x)P(x)$. They coincide for uniform message priors. In syndrome decoding, authors often call the most probable physical error a maximum-likelihood error, even though $P(e\mid s)$ is formally a posterior. We will always specify the optimized variable and probability.
+
+### Loss functions determine the correct target
+
+Inference alone does not specify a decision. Given an action $a$ and true error $e$, define a loss $L(a,e)$. The optimal decision minimizes posterior expected loss,
+
+$$
+a_*(s)=\underset{a}{\operatorname{argmin}}\sum_e L(a,e)P(e\mid s).
+$$ {#eq-prereq-bayes-risk}
+
+With loss one for an incorrect full error string, the answer is the most probable string. With loss equal to the number of wrong bits, each bit is decided from its marginal posterior independently. Those independent decisions can violate the observed parity. With loss one for a logical quantum error, the correct target is a probability summed over an equivalence class. These are three different statistical problems. A machine-learning model trained to optimize one need not solve the others.
+
+The **log-likelihood ratio** for a binary variable is $\ell=\log[P(e=0)/P(e=1)]$. For an independent nonuniform channel,
+
+$$
+-\log P(e)=\text{constant}+\sum_i e_i\log\frac{1-p_i}{p_i}.
+$$
+
+Probability maximization therefore becomes weighted cost minimization. The logarithm turns products into sums, making inference resemble energy minimization in statistical mechanics. Zero or unit probabilities require special treatment because the corresponding costs are infinite.
+
+### Entropy and finite experimental samples
+
+For a discrete distribution, Shannon entropy is
+
+$$
+H(E)=-\sum_e P(e)\log_2P(e),
+\qquad
+h_2(p)=-p\log_2p-(1-p)\log_2(1-p).
+$$
+
+The convention $0\log0=0$ follows by continuity. Entropy measures average uncertainty; it is not the probability that an error occurred. Independent binary flips have $H(E)=nh_2(p)$. Conditional entropy $H(E\mid S)$ is the remaining uncertainty after an observation. Mutual information $I(E;S)=H(E)-H(E\mid S)$ measures how much that observation resolves. Shannon's original work made these quantities operational through communication limits [@shannon1948]. We derive the coding consequence in @sec-classical-capacity.
+
+Numerical decoding results estimate a failure probability from finite samples. If $F$ failures occur in $N$ independent trials, $\hat p_L=F/N$. Away from zero and one its approximate standard error is $\sqrt{\hat p_L(1-\hat p_L)/N}$. At $F=0$ this formula incorrectly reports zero uncertainty. The probability of observing no failures is $(1-p_L)^N$; equating it to $0.05$ gives the one-sided 95% upper bound $p_L<1-0.05^{1/N}\approx3/N$. A claim of extremely small logical error rates therefore requires extremely many independent samples or a justified rare-event method.
+
+## Quantum states and measurements {#sec-quantum-prerequisites}
+
+A qubit has an orthonormal basis $\ket{0},\ket{1}$. A normalized pure state is $\ket{\psi}=\alpha\ket0+\beta\ket1$ with $|\alpha|^2+|\beta|^2=1$. An overall phase does not change any measurement probability. The relative phase does: $(\ket0+\ket1)/\sqrt2$ and $(\ket0-\ket1)/\sqrt2$ are distinguishable by a measurement in that basis.
+
+For multiple systems, the tensor product gives basis vectors such as $\ket{01}=\ket0\otimes\ket1$. A general two-qubit vector need not factor into single-qubit vectors. The Bell state $\ket\Phi=(\ket{00}+\ket{11})/\sqrt2$ is an example. If it factored, the product coefficients would need to satisfy $ad=bc$; here $ad=1/2$ and $bc=0$. Such nonfactorization is entanglement.
+
+The density operator unifies pure states, classical mixtures, and subsystems:
+
+$$
+\rho=\sum_j q_j\ket{\psi_j}\bra{\psi_j},\qquad
+\rho\ge0,\qquad \operatorname{tr}\rho=1.
+$$
+
+Different ensembles can give the same density operator and hence the same observable statistics. For example, equal mixtures of $\ket0,\ket1$ and of $\ket+,\ket-$ both give $I/2$. A reduced state is obtained by a partial trace. Explicitly,
+
+$$
+(\rho_A)_{aa'}=\sum_b(\rho_{AB})_{ab,a'b}.
+$$
+
+Tracing either half of the Bell state gives $I/2$, although the joint state is pure. Loss of access to an environment can therefore make a pure initial state appear mixed without any failure of unitary mechanics.
+
+A projective measurement has orthogonal projectors $\Pi_s$ with $\sum_s\Pi_s=I$. Outcome $s$ occurs with probability $\operatorname{tr}(\Pi_s\rho)$ and gives conditional state $\Pi_s\rho\Pi_s/P(s)$. If the outcome is forgotten, the state becomes $\sum_s\Pi_s\rho\Pi_s$. Measurement can destroy coherence between different eigenspaces while preserving every coherence inside an eigenspace. QEC exploits exactly this freedom: several logical states share each measured syndrome.
+
+The Pauli matrices and Hadamard gate are
+
+$$
+X=\begin{pmatrix}0&1\\1&0\end{pmatrix},\quad
+Y=\begin{pmatrix}0&-i\\i&0\end{pmatrix},\quad
+Z=\begin{pmatrix}1&0\\0&-1\end{pmatrix},\quad
+H=\frac1{\sqrt2}\begin{pmatrix}1&1\\1&-1\end{pmatrix}.
+$$
+
+They satisfy $XZ=-ZX$, $Y=iXZ$, $HXH=Z$, and $HZH=X$. A controlled-NOT maps $\ket{a,b}$ to $\ket{a,b+a}$, with binary addition. On a superposition it creates correlations rather than independent copies. If the target starts in $\ket0$, the output is $\alpha\ket{00}+\beta\ket{11}$.
+
+## Open-system evolution and quantum channels {#sec-quantum-channels}
+
+Let a system interact unitarily with an environment initially in $\ket{0}_E$. Choose an orthonormal environment basis $\ket a_E$. Expand
+
+$$
+U(\ket\psi\otimes\ket0_E)=\sum_a E_a\ket\psi\otimes\ket a_E,
+\qquad E_a={}_E\bra aU\ket0_E.
+$$
+
+Tracing out the environment gives the **operator-sum representation**
+
+$$
+\mathcal N(\rho)=\sum_a E_a\rho E_a^\dagger,
+\qquad \sum_aE_a^\dagger E_a=I.
+$$ {#eq-prereq-kraus}
+
+The second identity follows from unitarity and ensures trace preservation. Operators $E_a$ are Kraus operators. They are not generally unitary and their index is not an experimentally observed label. Changing the environment basis mixes Kraus operators without changing the channel.
+
+A physical channel must remain positive when applied to one part of an entangled state: $\mathcal N\otimes\mathcal I_R$ must map positive operators to positive operators for every reference system $R$. This is **complete positivity**, stronger than positivity of $\mathcal N$ alone. A trace-preserving map with a Kraus representation is completely positive, as each term preserves positivity even after tensoring with a reference. Choi established a finite-dimensional characterization in terms of a positive matrix [@choi1975].
+
+Three examples clarify what the channel model retains:
+
+| Channel | Kraus representation or action | Physical interpretation |
+|:--|:--|:--|
+| Bit flip | $\sqrt{1-p}I,\sqrt pX$ | Random reversal in a chosen basis |
+| Dephasing | $\sqrt{1-p}I,\sqrt pZ$ | Off-diagonal entries multiply by $1-2p$ |
+| Amplitude damping | $E_0=\ket0\bra0+\sqrt{1-\gamma}\ket1\bra1$, $E_1=\sqrt\gamma\ket0\bra1$ | Energy relaxation toward $\ket0$ |
+
+Amplitude damping changes populations and coherences differently:
+
+$$
+\mathcal N_\gamma\!\begin{pmatrix}\rho_{00}&\rho_{01}\\\rho_{10}&\rho_{11}\end{pmatrix}
+=\begin{pmatrix}\rho_{00}+\gamma\rho_{11}&\sqrt{1-\gamma}\rho_{01}\\
+\sqrt{1-\gamma}\rho_{10}&(1-\gamma)\rho_{11}\end{pmatrix}.
+$$
+
+It cannot be modeled exactly by a probabilistic Pauli operator: every mixture of Pauli conjugations maps $I$ to $I$, whereas amplitude damping does not. Replacing a channel by a Pauli model can be computationally useful, but is an approximation that needs independent justification.
+
+Every single-qubit operator can nevertheless be expanded as $A=a_I I+a_XX+a_YY+a_ZZ$, with $a_P=\operatorname{tr}(PA)/2$. This is a statement about a linear basis, not a claim that its four terms occur classically with probabilities $|a_P|^2$. Coherent interference between terms survives until the dynamics or measurement removes it. The distinction explains both why correcting Pauli errors can suffice for general local noise and why Pauli-noise simulation can misrepresent coherent hardware errors.
+
+### A reproducible channel calculation
+
+The following Python example checks trace preservation and the output of amplitude damping on $\ket+$. It requires only NumPy. The small off-diagonal entries are amplitudes of coherence, not error probabilities.
+
+```python
+import numpy as np
+gamma = 0.2
+E0 = np.diag([1.0, np.sqrt(1.0 - gamma)])
+E1 = np.array([[0.0, np.sqrt(gamma)], [0.0, 0.0]])
+rho = np.ones((2, 2)) / 2
+out = E0 @ rho @ E0.conj().T + E1 @ rho @ E1.conj().T
+assert np.allclose(E0.conj().T @ E0 + E1.conj().T @ E1, np.eye(2))
+assert np.isclose(np.trace(out), 1)
+assert np.min(np.linalg.eigvalsh(out)) >= -1e-12
+print(out)
+# [[0.6        0.4472136 ]
+#  [0.4472136  0.4       ]]
+```
+
+## What a decoder receives
+
+A decoder does not generally receive the quantum state. It receives classical outcomes produced by an allowed measurement protocol, perhaps together with calibration data, gate schedules, and previous outcomes. Its output may be a physical recovery operation, a logical label, or an update to a classical record of outstanding corrections. The last possibility is a **Pauli frame**: one tracks a known Pauli rather than immediately applying another imperfect gate.
+
+This view suggests four questions to ask of every decoding paper: What is the hidden variable? What data are available? What distribution connects them? What loss is minimized? Stating these questions precisely is often more informative than the choice of neural-network architecture. The next chapter answers them for classical codes, after which quantum mechanics changes the equivalence relation that defines success.
+
+## Exercises with worked solutions
+
+### Exercise 1: a binary inverse problem
+
+For $H=\begin{pmatrix}1&1&0\\0&1&1\end{pmatrix}$, find every error with syndrome $(1,0)^T$. Under independent flips with probability $p<1/2$, which is most probable? What happens at $p=1/2$?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The equations give $e_2=e_3=a$ and $e_1=1+a$. The candidates are $100$ and $011$. Their probabilities are $p(1-p)^2$ and $p^2(1-p)$. Their ratio is $(1-p)/p>1$, so $100$ is preferred. At $p=1/2$, all eight strings are equally probable a priori and the two allowed strings each have posterior probability $1/2$. At $p>1/2$, the higher-weight candidate is favored; minimum weight is therefore not an assumption-free rule.
+:::
+
+### Exercise 2: information gained from a parity
+
+Two independent fair bits have parity $S=E_1+E_2$. Compute $H(E_1,E_2)$, $H(E_1,E_2\mid S)$, and $I((E_1,E_2);S)$. Does observing $S$ give any information about $E_1$ alone?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The pair has four equally probable values, hence entropy two bits. Each parity leaves two equally probable values, so conditional entropy is one bit and mutual information is one bit. However $P(E_1=0\mid S)=1/2$ for either syndrome. Thus $I(E_1;S)=0$. A parity can reveal a collective property while revealing nothing about either constituent individually. Quantum syndrome measurements use a related separation between measurable collective properties and protected logical information.
+:::
+
+### Exercise 3: a coherent rotation is not a random flip
+
+Let $U=\exp(-i\theta X/2)$. Expand $U$ in the Pauli basis. Compare $U\ket0\bra0U^\dagger$ with a bit-flip channel of probability $p=\sin^2(\theta/2)$ acting on $\ket0\bra0$.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+Since $X^2=I$, the even and odd terms of the exponential give $U=cI-isX$, with $c=\cos(\theta/2)$ and $s=\sin(\theta/2)$. The coherent output is $\begin{pmatrix}c^2&ics\\-ics&s^2\end{pmatrix}$, whereas the stochastic output is $\operatorname{diag}(c^2,s^2)$. The computational-basis populations agree but a $Y$ measurement distinguishes the states. Agreement on one measurement is insufficient to establish equality of channels.
+:::
+
+### Exercise 4: complete positivity matters
+
+Transpose the first subsystem of $\ket\Phi\bra\Phi$ for $\ket\Phi=(\ket{00}+\ket{11})/\sqrt2$. Find its eigenvalues and explain why matrix transposition alone is not a quantum channel.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+In the basis $00,01,10,11$, the partial transpose is $\frac12\begin{pmatrix}1&0&0&0\\0&0&1&0\\0&1&0&0\\0&0&0&1\end{pmatrix}$. Its eigenvalues are $1/2,1/2,1/2,-1/2$. Transposition preserves positivity of a single density matrix, but its extension by the identity fails positivity on an entangled input. Therefore it is positive but not completely positive and cannot represent deterministic local physical evolution.
+:::

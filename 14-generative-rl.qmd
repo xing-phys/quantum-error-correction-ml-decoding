@@ -1,0 +1,263 @@
+# Generative inference, discrete diffusion, and reinforcement learning {#sec-generative-rl}
+
+A classifier directly selects a logical class. A generative model represents a probability distribution over many alternatives, and a reinforcement-learning agent chooses a sequence of actions. All three can implement a decoder, but they optimize different mathematical objects. This chapter develops their connections without treating a successful sample, a maximum-posterior decision, and a learned control policy as interchangeable.
+
+## Sampling is not maximum-posterior decoding {#sec-generative-sampling}
+
+For a measured syndrome $s$, suppose the true logical posterior is $p(l\mid s)$. An optimal deterministic decoder succeeds with probability $\max_l p(l\mid s)$. A decoder that independently samples its correction class from the same posterior succeeds with probability
+
+$$
+P_{\mathrm{sample}}(\text{success}\mid s)=\sum_l p(l\mid s)^2.
+$$ {#eq-generative-sample-success}
+
+This follows by summing the probability that the true class and sampled class coincide. Since $p_l\leq\max_jp_j$, the sum is at most $\max_jp_j$. For probabilities $(0.8,0.2)$, sampling succeeds with probability $0.68$, whereas the maximum-posterior choice succeeds with probability $0.8$. An exact posterior sampler is therefore not itself an optimal one-shot decoder.
+
+Sampling becomes useful when many samples estimate class probabilities, expose uncertainty, or supply candidate corrections to a reranking algorithm. If samples $l^{(1)},\ldots,l^{(M)}$ are independent, their frequencies estimate $p(l\mid s)$. The error of a class-frequency estimate is of order $M^{-1/2}$; identifying the largest of two nearly equal class probabilities requires many samples relative to the inverse square of their gap. Correlated Markov-chain samples reduce the effective sample count.
+
+Physical-error sampling should aggregate by logical class. The most frequent individual physical string may belong to a class with less total probability than another class containing many moderate-probability strings. Replacing a sum by a maximum discards degeneracy.
+
+## Restricted Boltzmann machines {#sec-generative-rbm}
+
+A restricted Boltzmann machine has binary visible variables $v_i$ and hidden variables $h_a$, with energy
+
+$$
+\mathcal E_\theta(v,h)=-\sum_i a_iv_i-\sum_a b_ah_a-\sum_{ia}W_{ia}v_ih_a,
+\qquad q_\theta(v,h)=\frac{e^{-\mathcal E_\theta(v,h)}}{Z_\theta}.
+$$
+
+There are no visible-visible or hidden-hidden couplings. Consequently, hidden units are conditionally independent given visible units,
+
+$$
+q(h_a=1\mid v)=\sigma\!\left(b_a+\sum_iW_{ia}v_i\right),
+$$
+
+and visible units are conditionally independent given hidden units with the analogous sigmoid. Alternating these two draws is block Gibbs sampling. Marginalizing hidden variables gives
+
+$$
+q_\theta(v)=\frac{\exp(\sum_i a_iv_i)\prod_a[1+\exp(b_a+\sum_iW_{ia}v_i)]}{Z_\theta}.
+$$
+
+The partition function $Z_\theta$ sums this expression over all visible strings and is generally difficult. Differentiating log likelihood yields a data expectation minus a model expectation. For example,
+
+$$
+\partial_{W_{ia}}\log q_\theta(v)
+=\mathbb E_{q(h\mid v)}[v_ih_a]-\mathbb E_{q(v,h)}[v_ih_a].
+$$
+
+The second term requires sampling from the model. Approximate short-chain methods can train useful models but introduce bias and may mix poorly between separated modes.
+
+For decoding, visible variables can include error bits and syndrome bits. Clamp the syndrome to the observed value and sample the remaining variables. Unless the architecture or sampling moves impose parity exactly, sampled errors can have an inconsistent syndrome and must be rejected or repaired. At large size, waiting for a valid sample can dominate latency.
+
+Torlai and Melko's landmark decoder used Boltzmann-machine generative learning for topological-code errors, with numerical tests on a toric code and phase-flip noise [@torlai2017neural] ([primary paper](https://doi.org/10.1103/PhysRevLett.119.030501)). Its conceptual contribution was to learn a structured error distribution rather than handcraft every inference rule. Subsequent generative models seek more tractable probabilities, faster sampling, and more explicit handling of logical equivalence.
+
+## Autoregressive models and exact normalized likelihoods {#sec-generative-autoregressive}
+
+The probability chain rule is an identity:
+
+$$
+q_\theta(x_1,\ldots,x_n\mid s)=\prod_{i=1}^n q_\theta(x_i\mid x_{<i},s).
+$$ {#eq-generative-autoregressive}
+
+Each conditional can be represented by an RNN, a masked feedforward network, or a causal Transformer. Normalization of every conditional guarantees normalization of the joint distribution. Likelihood evaluation requires no partition-function sum. Sampling proceeds sequentially from $x_1$ to $x_n$.
+
+Training uses **teacher forcing**: when predicting $x_i$, supply the true preceding values $x_{<i}$. Then negative log likelihood is $-\sum_i\log q_\theta(x_i\mid x_{<i},s)$. A causal mask permits parallel computation of these training terms because all true prefixes are known. During generation, later tokens depend on earlier generated tokens and must be produced in order, unless an additional approximation or parallel generation strategy is introduced.
+
+An RNN can update a cached state with each new token. A Transformer can cache keys and values for the prefix. These reduce repeated work but do not eliminate sequential dependence. State the cost per token, sequence length, number of candidates, and device rather than describing a count of neural calls as the complete computational complexity.
+
+### Greedy generation need not find the joint mode
+
+Consider $p(00)=0.30$, $p(01)=0.29$, $p(10)=0.40$, $p(11)=0.01$. The first-bit marginal favors zero with probability $0.59$. Given zero, the second bit favors zero. Greedy generation outputs $00$, although the joint mode is $10$. This happens even when every conditional is exact. A sequence of local maximum decisions is not generally a global maximum.
+
+Beam search keeps the $B$ most probable partial sequences at each step. It can recover modes missed by greedy generation but can still prune the globally optimal prefix. Its cost grows with beam width, and a bounded beam is an approximation. For high-rate codes, this distinction is essential when a method predicts $2k$ logical bits instead of enumerating $4^k$ classes. Linear-many conditional decisions avoid exhaustive enumeration by changing the search strategy; they do not solve general exact maximum-likelihood decoding in linear time.
+
+### Learn the logical distribution directly
+
+Choose an error decomposition into syndrome coordinates, logical coordinates $l$, and stabilizer coordinates $g$. A generative model can learn $q(s,l,g)$ or its marginal $q(s,l)$. If $s$ precedes $l$ in the autoregressive ordering, fixing the syndrome lets the model sample the logical posterior. Learning $q(s,l)$ has already summed out the stabilizer variables in the data distribution, so the target is naturally degeneracy-aware.
+
+The qecGPT framework and subsequent work by Cao, Pan, Feng, Wang, and Zhang explore this route with autoregressive models [@cao2023qecgpt; @cao2025generative] ([qecGPT preprint](https://arxiv.org/abs/2307.09025), [subsequent preprint](https://arxiv.org/abs/2503.21374)). Their motivation is especially strong for codes with many logical qubits. The term "unsupervised" refers to fitting a joint sampled distribution without an externally supplied optimal-decoder label. Simulator samples and algebraic conversion to syndrome and logical coordinates still provide information; this does not eliminate data generation or make physical labels experimentally observable in arbitrary computations.
+
+### Importance sampling and refinement
+
+Suppose a proposal $q_\theta(g\mid s,l)$ samples stabilizer coordinates within a fixed logical class, with nonzero support wherever the true class weight is nonzero. Then its unnormalized class mass
+
+$$
+Z_l(s)=\sum_g p(T(s)\overline L_lG_g)
+=\mathbb E_{g\sim q_\theta}\!\left[\frac{p(T(s)\overline L_lG_g)}{q_\theta(g\mid s,l)}\right]
+$$ {#eq-generative-importance}
+
+can be estimated by a sample average. The numerator requires an evaluable physical noise model; a purely empirical sampler may not supply it. The estimator of $Z_l$ is unbiased with exact weights, but the ratio $\hat Z_l/\sum_{l'}\hat Z_{l'}$ is generally biased at finite sample count. Heavy-tailed weights can make an apparently stable estimate unreliable. Monitor effective sample size and compare independent runs.
+
+A learned model can thus accelerate an established Monte Carlo calculation without replacing its target distribution. The proposal determines efficiency; exact weighting determines the target when assumptions hold.
+
+## Discrete diffusion from a Markov chain {#sec-generative-diffusion}
+
+A diffusion model introduces an artificial sequence of gradually corrupted variables $x_0,x_1,\ldots,x_T$. Here $x_0$ is a clean target, such as a physical-error string or logical-class vector, and $s$ is the observed syndrome on which generation is conditioned. The forward process is chosen by the model designer. Its index $t$ need not be a physical QEC round. Confusing denoising time with hardware time obscures what is being inferred.
+
+Let a single token take $K$ values. Define a row-stochastic transition matrix $Q_t$ with entries $Q_t(a,b)=q(x_t=b\mid x_{t-1}=a)$. Write $\overline Q_t=Q_1Q_2\cdots Q_t$. Then
+
+$$
+q(x_t=b\mid x_0=a)=\overline Q_t(a,b).
+$$
+
+Bayes' rule gives the exact one-token reverse posterior when the clean token is known and the conditioning event has positive probability,
+
+$$
+q(x_{t-1}=c\mid x_t=b,x_0=a)
+=\frac{\overline Q_{t-1}(a,c)Q_t(c,b)}{\overline Q_t(a,b)}.
+$$ {#eq-generative-reverse-posterior}
+
+The denominator is the sum of the numerator over $c$. This identity is the basic algebra behind categorical diffusion. For vector targets, the forward transitions are often independent across coordinates, so these known-clean posteriors factorize. The learned reverse model need not have independent clean predictions, though practical reverse steps often use a factorized parameterization.
+
+A network predicts $r_\theta(x_0\mid x_t,s,t)$ or directly predicts $p_\theta(x_{t-1}\mid x_t,s,t)$. In a clean-prediction construction, mix @eq-generative-reverse-posterior over predicted clean values. If the clean posterior were exact, this mixture would reproduce the exact reverse marginal. With finite model capacity and factorized approximations it is a learned approximation.
+
+Structured categorical forward processes, including absorbing-mask states, were systematized by Austin and collaborators [@austin2021d3pm] ([primary paper](https://arxiv.org/abs/2107.03006)). The construction is classical probability on a discrete state space; no continuous score derivative with respect to a bit is required.
+
+### Two useful forward processes
+
+For symmetric binary corruption,
+
+$$
+Q_t=\begin{pmatrix}1-\beta_t&\beta_t\\\beta_t&1-\beta_t\end{pmatrix}.
+$$
+
+The parity of accumulated flips gives effective flip probability
+
+$$
+\epsilon_t=\frac{1-\prod_{u=1}^t(1-2\beta_u)}{2}.
+$$
+
+To derive it, track $\mathbb E[(-1)^{x_t\oplus x_0}]$: each independent step multiplies it by $1-2\beta_t$. When the schedule makes $\prod_{u=1}^t(1-2\beta_u)$ approach zero, the distribution approaches an unbiased bit. Repeated deterministic flips do not mix the distribution.
+
+For absorbing masking, append a mask symbol $\mathtt M$. At step $t$, an unmasked token is replaced by $\mathtt M$ with probability $\beta_t$, while a masked token remains masked. Let $\alpha_t=\prod_{u=1}^t(1-\beta_u)$ be the probability that a token remains visible. Given $x_t=\mathtt M$ and clean value $a$, the reverse process reveals $a$ with probability
+
+$$
+\frac{\alpha_{t-1}-\alpha_t}{1-\alpha_t}
+$$
+
+and leaves it masked otherwise. Given an unmasked token, the reverse transition keeps it unchanged. The learned model supplies a distribution over $a$ for masked positions using the syndrome and currently visible targets.
+
+Parallel unmasking updates many positions per step. Fewer reverse steps can reduce latency but may reduce the opportunity to resolve interdependent logical variables. A confidence-based unmasking schedule is an additional inference choice whose effect should be measured.
+
+### The variational training objective
+
+Define a generative chain $p_\theta(x_{0:T}\mid s)=p_T(x_T)\prod_{t=1}^T p_\theta(x_{t-1}\mid x_t,s)$. Insert the known forward distribution $q(x_{1:T}\mid x_0)$ into $\log p_\theta(x_0\mid s)$ and apply Jensen's inequality. The negative evidence lower bound decomposes as
+
+$$
+\begin{aligned}
+\mathcal L_{\mathrm{VLB}}={}&D_{\mathrm{KL}}(q(x_T\mid x_0)\Vert p_T(x_T))\\
+&+\sum_{t=2}^T\mathbb E_{q(x_t\mid x_0)}D_{\mathrm{KL}}\!\left(q(x_{t-1}\mid x_t,x_0)\Vert p_\theta(x_{t-1}\mid x_t,s)\right)\\
+&-\mathbb E_{q(x_1\mid x_0)}\log p_\theta(x_0\mid x_1,s).
+\end{aligned}
+$$ {#eq-generative-elbo}
+
+The first term matches terminal noise, intermediate terms teach reverse transitions, and the last reconstructs clean data. Sampling a random $t$ provides a stochastic training estimator after accounting for time weights. An auxiliary clean-token cross-entropy can improve learning but changes the relative weighting of objectives. A paper's specific loss, sampling schedule, and stopping rule are part of its method.
+
+## Enforcing the syndrome during generation {#sec-generative-syndrome}
+
+If the target is a physical binary error vector, its posterior has support only on $He=s$ for noiseless syndrome observations. Independent forward bit flips usually leave this affine subspace. Conditioning a denoiser on $s$ helps it return toward the correct support, but does not impose exact validity.
+
+There are several principled constructions. One can generate coordinates $u$ in $e=e_0+Ku$ with $He_0=s$ and $HK=0$. Any generated string is then valid. One can use syndrome-preserving transitions $e\mapsto e+v$ with $Hv=0$; the move set must include the logical directions if one wants to sample multiple logical classes. Restricting moves to stabilizers explores only one class and cannot estimate its competitors. One can repair an unconstrained output with a conventional solver, but repair transforms the distribution and can move samples between classes. One can reject invalid samples, but acceptance can become extremely small.
+
+For noisy syndrome histories, the corresponding exact constraints involve an enlarged space-time fault vector and detector matrix. For coherent noise or a model with unobserved leakage, a simple binary affine posterior may be an approximation. State the model in which the constraint is exact.
+
+Alternatively, generate logical coordinates directly. All $2k$-bit logical labels are algebraically allowed; the network learns their conditional probabilities. This avoids physical syndrome violations but does not supply a full physical correction unless combined with a reference recovery. It also does not guarantee posterior calibration.
+
+Liu, Gong, and Clark's diffusion decoder models logical errors conditioned on syndromes for quantum LDPC codes, including masked diffusion on bivariate bicycle circuit-level benchmarks [@liu2025diffusion] ([primary preprint](https://arxiv.org/abs/2509.22347)). Xu and collaborators' DiffQEC studies conditional posterior generation using spatial-temporal syndrome processing [@xu2026diffqec] ([primary preprint](https://arxiv.org/abs/2604.24640)). Both report numerical advantages within specified comparisons. Neither architecture alone proves exact posterior sampling, universal syndrome consistency, or superiority across all noise models.
+
+### An exact two-state diffusion check
+
+This NumPy calculation verifies the reverse-posterior identity against direct joint probabilities. It is also a useful implementation test when constructing a categorical diffusion decoder.
+
+```python
+import numpy as np
+Q1 = np.array([[0.9, 0.1], [0.1, 0.9]])
+Q2 = np.array([[0.8, 0.2], [0.2, 0.8]])
+Qbar = Q1 @ Q2
+for clean in range(2):
+    for noisy in range(2):
+        reverse = Q1[clean, :] * Q2[:, noisy] / Qbar[clean, noisy]
+        assert np.isclose(reverse.sum(), 1)
+        joint = Q1[clean, :] * Q2[:, noisy]
+        assert np.allclose(reverse, joint / joint.sum())
+print("All reverse posteriors normalize and match Bayes' rule.")
+```
+
+Extend the example to three-bit errors conditioned on a repetition syndrome. Compute the exact posterior over the two allowed clean strings, corrupt them with independent flips, and marginalize to obtain the exact learned clean posterior at every noisy string. This separates errors in the forward algebra, posterior approximation, and final decision rule.
+
+## Reinforcement learning as sequential decision-making {#sec-generative-rl-mdp}
+
+A Markov decision process consists of states $z$, actions $a$, transition probabilities $P(z'\mid z,a)$, rewards $r$, and a discount factor $0\leq\gamma\leq1$. A policy $\pi_\theta(a\mid z)$ selects actions. Its objective is expected return $J(\theta)=\mathbb E[\sum_t\gamma^tr_t]$.
+
+A decoding environment may present the current syndrome, allow a local Pauli correction, update the syndrome, and stop when all defects disappear. Moving a defect means flipping a qubit adjacent to it; this changes the two incident check parities, or one parity at a suitable boundary. The final correction is the product of all actions.
+
+The syndrome alone is generally not a fully observed Markov state for physical correctness. Different hidden errors give the same syndrome but different logical outcomes. A simulator may retain the full hidden error as the environment state while exposing only the syndrome to the agent. With faulty measurements and ongoing noise, the agent faces partial observability and may need history or recurrent memory.
+
+A zero-syndrome terminal state is not necessarily successful: a nontrivial logical operator has zero syndrome. Rewarding only syndrome annihilation trains constraint satisfaction, potentially in the wrong logical class. Training can use simulator truth or a referee to reward logical survival, but the agent's deployment inputs must exclude that hidden truth.
+
+### Q learning and policy gradients
+
+The action value is $Q^\pi(z,a)=\mathbb E[\sum_{u\geq t}\gamma^{u-t}r_u\mid z_t=z,a_t=a]$. Optimal values satisfy the Bellman equation
+
+$$
+Q^*(z,a)=\mathbb E\!\left[r+\gamma\max_{a'}Q^*(z',a')\mid z,a\right].
+$$
+
+Deep Q learning fits a network to targets $y=r+\gamma\max_{a'}Q_{\theta^-}(z',a')$, with zero continuation at termination. A slowly updated target network $\theta^-$ and replayed transitions stabilize learning. They do not make nonlinear function-approximation convergence automatic.
+
+Policy-gradient methods directly optimize a stochastic policy. Differentiating trajectory probabilities gives
+
+$$
+\nabla_\theta J=\mathbb E\!\left[\sum_t\gamma^t\nabla_\theta\log\pi_\theta(a_t\mid o_{\leq t})\,(G_t-b_t)\right],
+$$ {#eq-generative-policy-gradient}
+
+where $G_t=\sum_{u\geq t}\gamma^{u-t}r_u$ is the discounted return from time $t$ and $b_t$ is an action-independent baseline. The baseline reduces variance because the expected score gradient is zero. Sparse terminal logical rewards can create high variance; shaped local rewards improve feedback but can change which policy is optimal unless constructed carefully.
+
+Andreasson and collaborators used deep Q learning to move toric-code defects under bit-flip noise [@andreasson2019rl] ([primary paper](https://quantum-journal.org/papers/q-2019-09-02-183/)). Fitzek and collaborators extended deep Q decoding to depolarizing noise and correlations between Pauli sectors [@fitzek2020rl] ([primary paper](https://doi.org/10.1103/PhysRevResearch.2.023230)). Sweke, Kesselring, van Nieuwenburg, and Eisert formulated repeated decoding with faulty syndrome measurements as an agent-environment process [@sweke2021rl] ([primary paper](https://doi.org/10.1088/2632-2153/abc609)). These studies establish useful constructions and numerical demonstrations, not a general guarantee that reinforcement learning is more sample-efficient than supervised posterior learning.
+
+### Decoding, calibration, and code discovery are different tasks
+
+RL can choose a correction, schedule BP updates, adjust matching priors, tune hardware pulses, or modify a code. These are different state/action/reward spaces. Sivak, Newman, and Klimov optimize decoder priors to reduce logical errors [@sivak2024priors] ([primary paper](https://doi.org/10.1103/PhysRevLett.133.150603)). The 2026 Nature work on RL control uses error-detection signals to steer physical controls during QEC [@google2026rlcontrol] ([primary paper](https://doi.org/10.1038/s41586-026-10759-2)). Its learning agent changes the noise-generating process; the logical decoder remains another component. An improved memory error rate can therefore reflect better controls, better inference, or both.
+
+## Hybrid approaches and allocation of compute {#sec-generative-hybrid}
+
+A useful hybrid has an explicit interface. A neural front end can estimate correlated edge weights for matching, identify local correctable clusters before union find, improve BP priors, choose an OSD search order, propose tensor-network contraction strategies, or assign confidence to a conventional output. A conventional back end can guarantee syndrome consistency or provide robust behavior outside the training distribution.
+
+Meinerz, Park, and Trebst's local neural preprocessing followed by a conventional decoder is an influential scalable example [@meinerz2022scalable] ([primary paper](https://doi.org/10.1103/PhysRevLett.128.080505)). This separation exploits the fact that common local patterns and rare global ambiguities have different computational needs.
+
+For a cascade, let the cheap stage cost $c_0$, let fallback probability be $r$, and let fallback cost $c_1$. Average cost is $c_0+rc_1$, but tail latency can approach $c_0+c_1$. The final failure probability is the sum of failure on accepted cheap-stage shots and failure on escalated shots. A confidence threshold should be tuned on a validation distribution using this joint accuracy-cost objective. Confidence that merely correlates with error is insufficient for a strict tail-latency or reliability guarantee.
+
+Hybridization also clarifies scientific claims. If a learned front end improves an otherwise identical solver, an ablation can isolate the value of learning. If the front end, physical noise model, solver implementation, and hardware all change, a speedup cannot be attributed to the neural architecture alone.
+
+## Exercises {#sec-generative-exercises}
+
+1. **Posterior sampling.** A syndrome has logical probabilities $(0.6,0.3,0.1)$. Compare the success probability of one posterior sample with the Bayes decision.
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+A single independent sample succeeds with $0.6^2+0.3^2+0.1^2=0.46$. The maximum-posterior class succeeds with probability $0.6$. Samples become useful for estimating the posterior or generating candidate sets, but drawing one correction class is a different decision rule.
+:::
+
+2. **Syndrome-preserving moves.** In a CSS sector, a sampler updates $e\mapsto e+v$. Give the condition for syndrome preservation and explain why stabilizer-only moves cannot compare logical classes.
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+Since $H(e+v)=He+Hv$, require $Hv=0$. The kernel includes stabilizer vectors and logical directions. Stabilizer-only moves remain in the same coset by definition. To estimate all logical masses, use moves connecting different logical classes or run separate class-conditioned samplers and compare their normalizations with a valid method.
+:::
+
+3. **Binary diffusion.** Two independent flip steps have probabilities $\beta_1=0.1$ and $\beta_2=0.2$. Find the effective corruption probability and the probability that the first step flipped, conditioned on a flipped final bit.
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+The final parity is odd with probability $0.1(0.8)+0.9(0.2)=0.26$. Both the first step flipping and the final parity being odd require first flip and second no flip, probability $0.08$. Thus the conditional probability is $0.08/0.26=4/13$. It is not $0.1$ because conditioning changes the distribution of trajectories.
+:::
+
+4. **Reward design.** An agent earns one point whenever a correction reduces the number of defects, and stops at zero defects. Does this reward enforce logical success?
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+No. Different paths can annihilate identical endpoints while differing by a logical string. Defect count cannot distinguish them. A terminal logical reward during simulation, a posterior-derived objective, or a carefully specified referee can supply missing feedback. Even shortest-path rewards favor minimum weight, which can differ from the maximum-probability coset under degeneracy or correlations.
+:::

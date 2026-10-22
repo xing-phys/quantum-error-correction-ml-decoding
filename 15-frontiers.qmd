@@ -1,0 +1,168 @@
+# Research frontiers and a critical reading map {#sec-frontiers}
+
+The modern decoding literature is best understood as a set of competing approximations to the same conditional-inference problem. Some methods approximate a posterior by local messages; some sum over error classes with tensor networks; some search candidates; some learn a compressed conditional distribution. Their practical value depends on which information they use, which mistakes they make, and how much classical computation they require before the next relevant quantum operation.
+
+This chapter provides a dated research map and a framework for evaluating new results. The literature audit for this edition ends on **23 October 2026**. Publication status is stated where frontier results are discussed. The map is selective rather than a claim to enumerate every relevant researcher or preprint. It emphasizes primary sources with inspectable methods, and separates theorems, numerical evidence, experimental evidence, and proposed future capabilities.
+
+## How the literature was investigated {#sec-frontiers-search-method}
+
+This edition combines targeted primary-source searches with citation tracing. Searches paired terms such as `quantum error correction`, `surface code`, `color code`, and `quantum LDPC` with `decoder`, `neural network`, `graph neural network`, `Transformer`, `autoregressive`, `reinforcement learning`, `discrete diffusion`, `masked diffusion`, `real-time`, `logical circuits`, and `postselection`. Date-focused searches added `2025` and `2026`. The search then followed references from landmark decoder papers and checked subsequent work by their authors and related research groups. This combination helps recover both foundational formulations and recent approaches whose titles use different vocabulary.
+
+Sources were checked at arXiv and primary publication venues, including the Physical Review journals, Quantum, Quantum Science and Technology, New Journal of Physics, Nature and its research journals, npj Quantum Information, and the AAAI, NeurIPS, ICML, and IEEE information-theory literature where relevant. Search-result summaries and institutional records served as discovery aids; substantive claims were tied to the paper, its publisher record, or an identified preprint. Publication dates, arXiv submission histories, and version numbers were checked when distinguishing a peer-reviewed result from a preprint or a materially revised claim. A later revision can change benchmark scope, so the text identifies versions where that affects interpretation.
+
+The audit is a broad research synthesis, not an exhaustive systematic review: it has no registered search protocol, complete database export, formal screening count, or claim to cover every researcher. Indexed searches can miss very recent uploads, alternate terminology, inaccessible supplementary material, and unpublished negative results. A citation records the evidence inspected for this edition; it does not imply independent replication of a large neural training run. The reusable derivations in the preceding chapters provide a basis for evaluating new papers after the audit date.
+
+## The common inference problem {#sec-frontiers-common}
+
+For a detector error model with independent binary fault variables $f_j$ of probabilities $p_j$, detector record $d=Df$, and logical effect $l=Af$, the posterior is
+
+$$
+p(l\mid d)\propto\sum_{f:\,Df=d,\,Af=l}\prod_jp_j^{f_j}(1-p_j)^{1-f_j}.
+$$ {#eq-frontier-common}
+
+This expression connects conventional and learned methods. Matching replaces the model by a graphlike pairing problem and chooses a likely chain. BP approximates marginal inference on a factor graph. OSD searches a structured candidate set after reliability ordering. Tensor contraction performs or approximates the sum. A neural classifier approximates the mapping from $d$ to class probabilities. Generative models approximate a joint distribution or provide proposals for sampling. Reinforcement learning can search through corrections or optimize components of another solver.
+
+Each method has at least two error sources: a mismatch between its physical model and the actual device, and an approximation in inference given that model. A powerful exact decoder of the wrong model can lose to an approximate decoder trained on representative experimental data. Conversely, a learned model trained on a poor simulator can inherit its omissions. "Model-free" means that detailed physical likelihoods are not specified to the predictor; its training data still encode a particular distribution.
+
+For coherent noise, this stochastic Pauli formula may be a modeling approximation. Amplitudes associated with indistinguishable error paths can interfere before measurement. Pauli twirling or effective detector models can remain useful but should not be silently identified with exact quantum dynamics. A learned classifier can fit observed outcomes without reconstructing the microscopic channel, provided training labels and observations define the deployment task.
+
+## An annotated development path {#sec-frontiers-timeline}
+
+The following chronology emphasizes changes in the problem formulation. Dates refer to publication or the named preprint version, not priority claims about every related idea.
+
+| Period | Representative primary works | Change in viewpoint |
+|---|---|---|
+| 2017–2018 | Torlai–Melko; Krastanov–Jiang; Varsamopoulos–Criger–Bertels | Learn an error distribution or a logical classification map |
+| 2018–2021 | Baireuther and collaborators; Chamberland–Ronagh; Andreasson, Fitzek, Sweke and collaborators | Include time, circuit faults, Pauli correlations, and sequential actions |
+| 2018–2022 | Breuckmann–Ni; Meinerz–Park–Trebst | Reuse local rules and combine neural preprocessing with scalable global inference |
+| 2023–2025 | Choukroun–Wolf; Cao and collaborators; Lange and collaborators; Gong–Cammerer–Renes; Maan–Paler | Use attention, generative logical models, and learned graph-message updates |
+| 2024–2026 | AlphaQubit and AlphaQubit 2; modular circuit decoders | Decode realistic device information and explicit logical computations |
+| 2025–2026 | Masked diffusion; DiffQEC; cross-distance transfer; learned postselection | Model structured posteriors, allocate compute, and quantify selective reliability |
+
+### What the early demonstrations established
+
+The early neural work showed that one could train a useful decoding map without analytically solving every syndrome class. Its limitation was often a small fixed code, idealized noise, or a training problem that grew sharply with distance. The correct lesson is the existence of learnable structure, not that general decoding complexity disappeared. The derivations of class labels and sampling in @sec-machine-learning and @sec-generative-rl explain why these formulations differ [@torlai2017neural; @krastanov2017probabilistic; @varsamopoulos2018feedforward].
+
+Recurrent decoding made the temporal process central, while RL made the sequence of correction decisions explicit. Circuit-level studies highlighted the gap between an ideal parity-check model and a fault-tolerant extraction circuit [@baireuther2018correlated; @chamberland2018deep; @andreasson2019rl; @fitzek2020rl; @sweke2021rl]. These developments should be read as complementary responses to different missing structures.
+
+### Why locality and graph structure changed scaling
+
+Local models share rules across positions and can handle larger inputs without exponentially growing tables. Neural preprocessing can remove common clusters before a global solver handles residual ambiguity [@breuckmann2018neural; @meinerz2022scalable]. Learned graph updates instead act on the Tanner graph itself [@gong2024gnn; @ninkovic2024gnn; @maan2025astra]. The open question is how the required receptive field, iteration count, and training set grow when target failure probability decreases.
+
+Lange and collaborators' published graph-classification decoder uses annotated detector graphs and includes experimental-data tests [@lange2025datadriven] ([primary paper](https://doi.org/10.1103/PhysRevResearch.7.023181)). Its significance is the use of measured syndrome histories as structured data. Comparisons depend on training volume and chosen conventional baselines; graph representation alone is not a certificate of accurate inference.
+
+## Frontier results, 2025–2026 {#sec-frontiers-current}
+
+The entries below are concise annotations. The preceding chapters derive the reusable mathematics in detail, so a reader can understand the proposed mechanisms without treating abstracts as substitutes for algorithms.
+
+**Masked diffusion for high-rate codes — preprint.** Liu, Gong, and Clark formulate logical-error inference with diffusion and compare masked and continuous constructions on quantum LDPC benchmarks [@liu2025diffusion] ([primary source](https://arxiv.org/abs/2509.22347)). Their circuit-level bivariate bicycle experiments investigate the accuracy/runtime tradeoff as reverse steps are reduced. This targets correlated logical outputs without a $4^k$ softmax. The reported runtime advantage is an empirical comparison under their implementations, not a worst-case complexity separation between algorithm families. The important follow-up is independent replication with matched hardware and calibrated confidence.
+
+**DiffQEC — preprint.** Xu and collaborators combine discrete denoising with a syndrome processor that carries spatial and temporal information [@xu2026diffqec] ([primary source](https://arxiv.org/abs/2604.24640)). They report experimental-data and simulated-code comparisons, including confidence-based uses of the learned distribution. The connection to Bayesian inference is useful, but probabilistic output should be tested for calibration and class aggregation. Compare total inference over all denoising steps and samples, not a single denoiser invocation.
+
+**Real-time neural decoding — preprint.** AlphaQubit 2 addresses the gap between accurate neural memory decoding and implementation throughput [@senior2025alphaqubit2] ([version 2](https://arxiv.org/abs/2512.07737v2)). Its real-time and accuracy-oriented configurations should be distinguished. The useful research direction is joint design of communication pattern, representation, training curriculum, and accelerator execution. It remains necessary to test full feedback paths and logical-gate workloads beyond the reported memory settings.
+
+**Transfer and code-agnostic inputs — preprints.** GraphQEC accepts graph-structured stabilizer problems, while NTU aligns decoding across related code distances [@hu2025graphqec; @yan2026ntu] ([GraphQEC v2](https://arxiv.org/abs/2502.19971v2), [NTU](https://arxiv.org/abs/2606.27119)). These approaches address architecture reuse and training cost from different directions. NTU's adaptation should be distinguished from frozen zero-shot extrapolation. Architecture universality is not a theorem that arbitrary code families share the same efficiently learnable posterior.
+
+**Geometric convolution for quantum LDPC decoding — preprint.** Gu, Bonilla Ataides, Lukin, and Yelin exploit code geometry with a convolutional decoder and study strong low-noise suppression and confidence estimates [@gu2026scalable] ([primary source](https://arxiv.org/abs/2604.08358)). Their very small reported error probabilities make rare-event estimation methodology especially important. Such results require the full noise model, estimator assumptions, and uncertainty analysis before they can support resource estimates for an algorithm. Geometry-based locality and graph-agnostic universality offer different inductive biases rather than one uniformly dominating strategy.
+
+**From memory to algorithms — peer-reviewed papers.** Zhou and collaborators' MCCD uses gate-specific recurrent modules, trained with mirror circuits, to track entangling-gate correlations [@zhou2025circuits] ([primary source](https://doi.org/10.1038/s43588-025-00897-4)). Bonilla Ataides, Gu, Yelin, and Lukin use modular attention for algorithmic decoding and incorporate information about loss and relevant observables [@bonilla2026algorithms] ([primary source](https://doi.org/10.1103/vjn1-mbxl)). Both make the circuit an input to inference rather than assuming independent memories. Generalization to deeper or unseen workloads is numerical evidence for the tested gate distributions; it is not a proof for arbitrary adaptive universal computation.
+
+**Portable graph-recurrent hardware decoding — October 2026 preprint.** Lange, Fjeldså, Johansson, and Granath use reusable local encoders, simulation pretraining, and hardware fine-tuning [@lange2026modular] ([primary source](https://arxiv.org/abs/2610.03869)). They test memory, a variable-noise stability experiment, and a small $ZZ$ lattice-surgery merge on superconducting hardware. This is a useful step toward decoding operations rather than only long memories. The scope remains finite-distance experimental evidence; portability must be specified in terms of which components were retrained or adapted.
+
+**Learned postselection — September 2026 preprint.** Carty, Noszko, Roffe, and Bondesan train graph networks to predict decoder failure from syndromes and, for quantum LDPC codes, BP information [@carty2026postselection] ([primary source](https://arxiv.org/abs/2610.00504)). Their numerical surface- and bivariate-bicycle memory tests use circuit-level depolarizing noise. The relevant frontier is a risk-versus-acceptance curve, with rejected-shot overhead counted. A large reduction in retained-shot error is a different claim from reducing unconditional error in a computation that cannot restart.
+
+**RL control and code-decoder co-design.** The published work of Sivak and collaborators uses QEC detection events to steer drifting physical controls [@google2026rlcontrol] ([primary source](https://doi.org/10.1038/s41586-026-10759-2)). This differs from RL inference over corrections. Sella, Pinsler, and Heinis instead use RL to choose bivariate bicycle codes for a fixed decoder under depolarizing noise [@sella2026codesign] ([preprint](https://arxiv.org/abs/2608.15754)). These results motivate optimizing the complete stack. They do not imply that a code chosen for one decoder and noise model is optimal after changing the circuit, connectivity, or hardware constraints.
+
+## Comparing methods without a misleading league table {#sec-frontiers-comparison}
+
+No single scalar ranks all decoders. At minimum, place methods on an accuracy, latency, memory, training-cost, and robustness frontier. A method is Pareto-dominated only if another is no worse in every stated metric under the same task and strictly better in at least one. Different hardware or noise assumptions invalidate that direct comparison.
+
+| Family | Useful strength | Characteristic limitation | Decisive comparison |
+|---|---|---|---|
+| MWPM and correlated matching | Mature, interpretable graph inference | Graphlike approximations and omitted correlations | Same detector model, correlated weights, optimized implementation |
+| BP with postprocessing | Sparse structure; broad quantum LDPC applicability | Loops, degeneracy, and expensive difficult instances | Same iteration budget and postprocessing order |
+| Tensor networks | Systematic approximation to class sums | Contraction cost and bond-dimension truncation | Accuracy versus contraction resources |
+| Direct neural classification | Fast fitted map; rich experimental inputs | Training and distribution shift | Same information, held-out runs, full runtime |
+| GNN or neural BP | Shared sparse local rules | Finite receptive field and graph transfer | Accuracy versus iteration depth and graph size |
+| Autoregressive models | Normalized structured probabilities | Sequential generation and approximate mode search | Total candidate-search cost and joint-class failure |
+| Discrete diffusion | Parallel target updates and flexible refinement | Multiple reverse steps; calibration and constraints | Steps/samples versus failure and tail latency |
+| RL decoders | Sequential strategy optimization | Reward design, sample cost, partial observability | Complete trajectories versus direct inference |
+| Hybrids | Allocate specialized tools to different cases | Interface and fallback complexity | Full cascade cost, failure decomposition, and tails |
+
+A "threshold improvement" needs a family of code sizes, a specified noise parameter, and an inference protocol. A finite-size crossing can drift because of boundaries, training quality, decoder size, or an error floor. A pseudo-threshold compares one encoded device with a particular physical reference; it is not an asymptotic threshold. A lower threshold can coexist with better practical error rates in the hardware's operating range.
+
+Similarly, a complexity claim must specify whether it concerns worst-case work, average work under a noise distribution, parallel depth, or measured wall time. A bounded-iteration network has bounded depth for a fixed architecture; maintaining accuracy at increasing distance may require changing the architecture. General computational-hardness results concern worst-case families and do not forbid efficient high-probability decoding below threshold on a structured family.
+
+## Benchmark reporting as an experimental method {#sec-frontiers-reporting}
+
+A reproducible decoder study should define the following pieces as part of its scientific model.
+
+1. **Code and circuit:** exact check matrices, logical operators, boundaries, extraction schedule, number of rounds, preparation, final readout, logical gates, and leakage-removal operations.
+2. **Noise and information:** every fault channel and its rate convention; spatial/temporal correlations; analog or erasure inputs; which calibration data each decoder receives.
+3. **Training and selection:** simulator version, data counts, seeds, rate mixtures, architecture, optimizer, stopping rule, validation design, and experimental run splits.
+4. **Inference contract:** physical correction or logical outcome; streaming or retrospective; number of candidates or samples; ensembling, repair, fallback, and rejection rules.
+5. **Reliability:** block versus per-logical-qubit failure, per-round conversion assumptions, confidence intervals, observed failure counts, and rare-event estimation method.
+6. **Classical resources:** training cost and energy where available, parameter storage, peak memory, hardware, batch size, precision, average throughput, individual latency, and high-percentile stalls.
+7. **Artifacts:** scripts, dependency versions, exact configuration, reusable data or a generator, and trained weights where licensing permits.
+
+The strongest ablations change one interface at a time: add analog information to both learned and conventional methods; compare graph structure with shuffled structure; compare recurrence at equal parameter budget; measure the consequence of removing $X/Z$ coupling; or replace a learned component with a calibrated analytic baseline. Ablations that simultaneously reduce width, training data, and inference budget cannot isolate one claimed mechanism.
+
+For experimental transfer, use a time-forward split: train on earlier runs, calibrate on a subsequent interval, and test on later acquisition. Randomly mixing shots from a drifting run measures interpolation within the same drift mixture. Both are legitimate experiments, but only the former probes deployment under future drift.
+
+## Open problems with falsifiable targets {#sec-frontiers-open}
+
+**Reliable ultra-low-error extrapolation.** Fault-tolerant algorithms can require probabilities far below direct Monte Carlo reach. A useful result would connect a neural decoder to validated importance sampling, exact small-code references, adversarial fault enumeration at low weight, and confidence intervals that include estimator uncertainty. Fitting a straight line through a few distances is a conjectural extrapolation unless supported by a model and tests for an error floor.
+
+**Understanding what representations learn.** Attention aligned with code geometry is suggestive, not proof that the network learned a particular decoding algorithm. Equivalent hidden representations can yield different attention pictures. Intervene: remove selected edges, alter a controlled correlation, scramble a physically irrelevant coordinate, or compare a representation against exact small-code posterior ratios. A mechanistic claim becomes stronger when it predicts a new failure pattern before evaluation.
+
+**Cross-code and cross-noise generalization.** Hold the model frozen and vary one property at a time: distance, rate, degree, topology, schedule, bias, correlation length, leakage lifetime, or drift. A generalization matrix is more informative than a single unseen example. Establish which invariances are exact, which are learned, and which require adaptation. The conjecture that sufficiently broad training yields a universal practical decoder remains an empirical research program.
+
+**Fault-tolerant logical computation.** Memory benchmarks omit lattice surgery, code deformation, measurement feedforward, and changing logical frames. A reusable decoder needs an interface for these operations and a way to track correlated logical uncertainty. Test a genuinely new circuit distribution, not just longer samples from the same templated memory. Account for the classical output's deadline at each non-Clifford or adaptive step.
+
+**Safe adaptation during a computation.** Online fitting can track drift, but a transiently worse policy can harm an ongoing logical state. Separate control adaptation, noise estimation, and decoding updates. Evaluate abrupt changes, rare bursts, delayed labels, and the possibility that lowering a detection-event surrogate reduces observability rather than errors. The most persuasive validation checks independent logical outcomes or other protected metrics, rather than only the optimized surrogate.
+
+**Hardware-aware probabilistic inference.** A posterior model with excellent batched throughput may miss an individual feedback deadline. Quantization, pruning, sparse communication, and distillation can change confidence and rare-case behavior. A complete demonstration should show that the accelerated model retains logical accuracy under the same deployment distribution, including fallback and communication costs.
+
+**Code-decoder-control co-design.** The best asymptotic code parameters may not yield the smallest practical space-time cost. Connectivity, extraction depth, leakage handling, neural inference cost, and logical gates all contribute. A falsifiable comparison fixes an algorithmic workload and target failure budget, then optimizes each candidate stack under the same hardware constraints. Optimizing only memory threshold is a useful component study but does not answer that system-level question.
+
+## A research project that connects the chapters {#sec-frontiers-project}
+
+Choose a small CSS code whose full Pauli distribution can be enumerated. Construct exact logical posteriors for several noise biases. Compare a class lookup table, independent marginal prediction, BP with exact repair, a small GNN, an autoregressive logical model, and a categorical diffusion model. Keep training and test draws separate and use identical test shots.
+
+First verify all algebraic conventions on single-qubit faults. Then compare cross-entropy, logical block failure, calibration, and inference time. Sweep sample count to distinguish statistical limitations from approximation error. Sweep distribution shift while freezing parameters. Finally, introduce a cheap-stage/fallback cascade and measure its acceptance-risk-latency curve. This project is modest enough to reproduce and broad enough to expose most conceptual pitfalls in frontier claims.
+
+Preserve its derivations, conventions, configurations, and negative results as research notes. A clear small-code counterexample to a claimed decision rule can be more informative than a larger benchmark whose posterior is unknown.
+
+## Exercises {#sec-frontier-exercises}
+
+1. **A threshold comparison.** Paper A reports a code-capacity depolarizing threshold. Paper B reports circuit-level memory errors below a hardware physical error rate. What additional information is required to rank them?
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+The tasks differ. Specify extraction circuits, rate conventions, measurement faults, code sizes, time boundaries, outputs, and baselines, then evaluate both methods on a common distribution. Code-capacity noise omits faulty extraction; a larger numerical threshold in that setting does not establish better hardware decoding. Also compare error rates in the relevant operating regime, since threshold alone does not determine finite-distance performance.
+:::
+
+2. **Postselection overhead.** A decoder accepts a complete run with probability $a=0.8$ and has conditional failure $10^{-5}$. Under independent identical retries, what is the expected number of runs per accepted output? Why is this insufficient for an arbitrary long computation?
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+The retry count is geometric with mean $1/a=1.25$. But a long computation may not be restartable at every local rejection, and independent per-stage acceptance $a$ over $M$ stages yields total acceptance $a^M$ if every stage must pass. Correlations, restart cost, and whether intermediate states can be preserved all matter. Conditional reliability must therefore be interpreted with the complete protocol.
+:::
+
+3. **Failure-count precision.** A rare-event estimate is based on $100$ directly observed independent failures. Approximately what is its relative statistical standard error when $p_L\ll1$? What if there are only four failures?
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+Using $F\approx Np_L$, the relative standard error is approximately $1/\sqrt F$. It is about $10\%$ for $F=100$ and $50\%$ for $F=4$, where exact binomial intervals are preferable. An importance-sampling estimator additionally depends on weight variability; its raw number of sampled failures is not sufficient to determine uncertainty.
+:::
+
+4. **Model versus inference error.** An exact decoder for a fitted Pauli noise model is worse on hardware than a learned classifier. Does this contradict optimality of maximum-likelihood decoding?
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+No. Optimality applies to the true posterior, the specified observations, and the chosen loss. An exact calculation using a mismatched model is not the true Bayes rule. The classifier may exploit omitted correlations or additional analog inputs. A fair causal explanation requires matching information and separating model mismatch from inference approximation.
+:::

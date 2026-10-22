@@ -1,0 +1,238 @@
+# Computational laboratories {#sec-labs}
+
+## Reproducing the book
+
+These laboratories connect equations to executable calculations. Julia is the primary language for binary algebra and exact enumeration. Python supplies a transparent NumPy training implementation and the Stim/PyMatching circuit simulation. The examples run on a CPU; no accelerator, external dataset, or paid service is required.
+
+From the repository root:
+
+```bash
+julia --startup-file=no --project=. examples/exact_decoding.jl
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-lock.txt
+.venv/bin/python examples/neural_coset.py
+.venv/bin/python examples/surface_memory.py --shots 20000
+.venv/bin/python scripts/make_figures.py
+quarto render
+.venv/bin/python scripts/verify.py
+node scripts/verify_interactives.cjs
+```
+
+The original run used Julia 1.12.6, Python 3.12.3, NumPy 2.2.6, Stim 1.15.0, and PyMatching 2.3.1. The Julia examples use only standard libraries and are intended for Julia 1.10 or later. The Python environment is fully recorded in [requirements-lock.txt](https://github.com/xing-phys/quantum-error-correction-ml-decoding/blob/main/requirements-lock.txt). The shorter [requirements.txt](https://github.com/xing-phys/quantum-error-correction-ml-decoding/blob/main/requirements.txt) lists directly used packages. Rendering executes no simulation automatically: the checked-in data make the book build independent of simulation time. Regenerating data is an explicit operation.
+
+Exact floating-point values and seeded random streams may vary with software versions and platforms; statistical conclusions should not depend on bitwise equality across arbitrary environments. Batch decoder timing is especially machine-dependent. The verification script checks algebraic identities, cross-language consistency, optimal-risk inequalities, confidence intervals, resources, references, and local links.
+
+## Laboratory 1: Syndrome, representative, and logical class {#sec-lab-steane}
+
+Use the Steane CSS matrix whose seven columns are the nonzero three-bit vectors in integer order, with least significant bit first:
+
+$$
+H=\begin{pmatrix}
+1&0&1&0&1&0&1\\
+0&1&1&0&0&1&1\\
+0&0&0&1&1&1&1
+\end{pmatrix}.
+$$ {#eq-lab-steane-H}
+
+Different chapters may permute qubits to put a generator matrix in systematic form. Such a permutation changes the displayed columns but not the code. This laboratory fixes the order above.
+
+For $X$ errors, the $Z$ checks produce $s=He$. Since column $j$ is the binary representation of $j$, a single $X_j$ has syndrome integer $j$. Choose a reference recovery $r_s=X_s$ for $s\ne0$ and identity for $s=0$. The residual $e+r_s$ is in $\ker H$. The $X$ stabilizers form $\operatorname{row}H$, of dimension three, inside this four-dimensional kernel. Every row has even weight. The kernel has an odd-weight logical representative, for example $X_1X_2X_3$, because $1\oplus2\oplus3=0$. Consequently,
+
+$$
+\ell(e)=|e+r_s|\bmod2
+$$ {#eq-lab-logical-parity}
+
+distinguishes its two logical classes. This parity shortcut is specific to this representation of the Steane code; a general code needs a constructed logical basis.
+
+::: {.content-visible when-format="html"}
+<div class="lab-widget" data-qec-widget="steane" aria-label="Interactive Steane syndrome laboratory">
+<strong>Toggle physical X errors.</strong> Compare q3 with the pair q1 + q2. They have the same syndrome and different logical classes after the reference correction.
+</div>
+:::
+
+::: {.content-visible when-format="pdf"}
+The web edition includes seven error toggles. On paper, compare $e=X_3$ and $e=X_1X_2$: both have syndrome integer three; the reference correction $X_3$ succeeds on the first and leaves logical $X_1X_2X_3$ on the second.
+:::
+
+In Julia, load [QEC.jl](examples/QEC.jl):
+
+```julia
+include("examples/QEC.jl")
+using .QEC
+H = steane_H()
+@assert all(iszero, mod.(H*H', 2))
+@assert gf2rank(H) == 3
+for e in 0:127
+    s = syndrome(e)
+    residual = xor(e, pure_error(s))
+    @assert syndrome(residual) == 0
+end
+```
+
+The library's verification routine additionally constructs the stabilizer span and checks all 128 error patterns against @eq-lab-logical-parity. This is a meaningful test of logical classification rather than merely checking that a correction has the right syndrome.
+
+## Laboratory 2: Exact decoding with a correlated fault {#sec-lab-correlated}
+
+Define a mixture noise model
+
+$$
+P(e)=(1-\alpha)p^{|e|}(1-p)^{7-|e|}+\alpha\mathbf1\{e=X_1X_2\}.
+$$ {#eq-lab-mixture}
+
+With probability $\alpha$, a fixed two-qubit burst occurs; otherwise each qubit flips independently with probability $p$. This is a mixture, not an independent burst applied on top of independent flips. The deliberately large burst setting below makes its inferential effect visible. It is not proposed as a calibrated hardware model.
+
+Enumerate the joint weights
+
+$$
+W_{s\ell}=\sum_{e:He=s,\,\ell(e)=\ell}P(e).
+$$
+
+The reference minimum-weight decoder always chooses class zero, so its failure probability is $\sum_sW_{s1}$. Exact logical-class maximum likelihood chooses $\arg\max_\ell W_{s\ell}$ and fails with probability $\sum_s\min(W_{s0},W_{s1})$. It can prefer the correlated weight-two event over a weight-one event sharing its syndrome.
+
+```julia
+include("examples/QEC.jl")
+using .QEC
+W = joint_weights(0.06, 0.18)
+println(sum(W[:,2]))      # 0.22671158588375048
+println(exact_failure(W)) # 0.07467321725583359
+```
+
+For independent noise at $p=0.06$, $\alpha=0$, both decisions give failure $0.05696534863872$. At $\alpha=0.18$, the optimal decision changes for syndrome three. The improvement comes from correctly modeling correlations; a classical lookup table is equally capable of achieving it. Learning is one way to discover the decision from examples.
+
+::: {.content-visible when-format="html"}
+<div class="lab-widget" data-qec-widget="posterior" aria-label="Exact posterior and degeneracy laboratory">
+<strong>Change the noise distribution.</strong> The browser recomputes the complete joint distribution and the optimal decision for each syndrome.
+</div>
+:::
+
+The complete parameter grid is downloadable as [exact-decoding.csv](data/exact-decoding.csv). Exact enumeration scales exponentially; its role is an oracle for small cases, a unit of understanding, and a validation target.
+
+## Laboratory 3: Training a neural logical classifier {#sec-lab-neural}
+
+The fully explicit [neural_coset.py](examples/neural_coset.py) uses three syndrome bits as inputs, a hidden layer with 16 $\tanh$ units, and one sigmoid output. No machine-learning framework hides the gradients. If $x$ is a vector of syndrome features,
+
+$$
+h=\tanh(xW_1+b_1),\quad z=hW_2+b_2,\quad q=\sigma(z).
+$$
+
+With binary class label $y$, the derivative of cross-entropy with respect to $z$ is $q-y$. The hidden derivative multiplies by $W_2$ and $1-h^2$, followed by the input outer product to obtain the $W_1$ gradient. For numerical stability the implementation computes loss as $\log(1+e^z)-yz$ using `logaddexp`.
+
+Twenty thousand sampled errors supply training labels. Because there are only eight distinct syndrome inputs, aggregating their label counts gives exactly the same full-batch gradient as processing the individual examples. This shortcut is not exact enumeration of the training distribution: the empirical counts still come from random training samples. One hundred thousand independent errors from a different random seed form the test set. The complete enumerated distribution is used only for the final oracle comparison.
+
+The recorded run has the following results:
+
+| Quantity | Value |
+|---|---:|
+| Independent flip probability $p$ | 0.06 |
+| Fixed-pair burst probability $\alpha$ | 0.18 |
+| Training shots | 20,000 |
+| Independent test shots | 100,000 |
+| Test failures | 7,421 |
+| Test logical failure estimate | 0.07421 |
+| Exact risk of learned decisions | 0.0746732173 |
+| Exact optimal class-decoding risk | 0.0746732173 |
+| Reference minimum-weight risk | 0.2267115859 |
+
+The learned decisions match the exact Bayes decisions for all eight syndromes. This is a property of this executed run and this tiny distribution, not a general guarantee for gradient descent or neural decoding. Calibration remains a separate property: matching the optimal decision does not prove that every output probability equals the true posterior.
+
+![Executed training loss and exact logical posterior for the correlated Steane example. Syndrome three favors logical class one after the reference correction; the other syndromes favor class zero.](figs/neural-coset){#fig-neural-lab}
+
+The [result JSON](data/neural-results.json) records losses, decisions, seeds, and probabilities. The [saved weights](data/neural-model.npz) contain only four small NumPy arrays. A reader can inspect every number.
+
+To test distribution shift, evaluate these fixed decisions on $\alpha=0$ without retraining. They now select the wrong Bayes class for syndrome three. Accurate training on one noise model is insufficient to establish robustness to another. This experiment separates a model's ability to represent a posterior from the validity of its assumed environment.
+
+## Laboratory 4: Homology and invisible logical operators
+
+On a square torus, apply $Z$ operators to edges. Each edge flips the two star checks at its endpoints. A closed loop has no endpoints and therefore no syndrome. A contractible loop is a product of plaquette stabilizers; a loop winding around the torus acts logically. Periodic seam parities distinguish winding for a closed chain.
+
+::: {.content-visible when-format="html"}
+<div class="lab-widget" data-qec-widget="toric" aria-label="Interactive toric-code homology laboratory">
+<strong>Build edge chains on a four-by-four torus.</strong> h(x,y) and v(x,y) denote horizontal and vertical edges, including periodic wrap edges. The dashed stubs cross an identified boundary. Red vertices are star-check defects. Use the logical-loop button to construct an error with no defects.
+</div>
+:::
+
+For an open chain, seam parity depends on the reference recovery and is not independently a logical invariant. First close the chain with a chosen recovery, then classify the residual. This qualification prevents a common confusion between a physical error's support and the homology class of the corrected error.
+
+## Laboratory 5: Finite-size suppression without a quantum threshold claim
+
+For a repetition code of odd length $d$ under independent bit flips, majority decoding fails if at least $(d+1)/2$ bits flip:
+
+$$
+p_L(d,p)=\sum_{w=(d+1)/2}^{d}\binom dw p^w(1-p)^{d-w}.
+$$ {#eq-lab-repetition}
+
+For $p<1/2$, concentration around the mean makes the majority-error probability decrease with length. The code protects one classical basis against $X$ noise. It does not protect arbitrary quantum states against $Z$ noise, so $1/2$ is not a universal quantum-memory threshold.
+
+![Exact majority-decoding failure for independent bit flips with perfect checks. The curves are binomial sums, not Monte Carlo estimates.](figs/repetition-scaling){#fig-repetition-scaling}
+
+::: {.content-visible when-format="html"}
+<div class="lab-widget" data-qec-widget="repeat" aria-label="Exact repetition-code scaling laboratory">
+<strong>Compare distances at a fixed physical noise rate.</strong> The calculation evaluates the exact binomial tail.
+</div>
+:::
+
+## Laboratory 6: Circuit-level surface memory {#sec-lab-circuit}
+
+The [surface_memory.py](examples/surface_memory.py) experiment uses Stim to generate rotated surface-code $X$ memories and PyMatching to decode their detector graphs [@gidney2021]. Distances are three, five, and seven; each memory lasts $T=d$ rounds. At every point, 20,000 shots are generated with an explicit seed. All four named noise parameters are set to the same $p$:
+
+```python
+circuit = stim.Circuit.generated(
+    "surface_code:rotated_memory_x", distance=d, rounds=d,
+    after_clifford_depolarization=p,
+    before_round_data_depolarization=p,
+    before_measure_flip_probability=p,
+    after_reset_flip_probability=p,
+)
+model = circuit.detector_error_model(decompose_errors=True)
+matching = pymatching.Matching.from_detector_error_model(model)
+dets, obs = circuit.compile_detector_sampler(seed=seed).sample(
+    shots, separate_observables=True)
+prediction = matching.decode_batch(dets)
+failures = np.any(prediction != obs, axis=1).sum()
+```
+
+Graphlike decomposition permits matching but does not mean all correlations in the original circuit have disappeared physically. This example uses ordinary matching on the decomposed model. It measures a final logical observable in one basis; it does not benchmark universal logical circuits or the full two-component logical Pauli channel. The wall-clock interval encloses only `decode_batch`, so it is a batch software timing rather than integrated hardware latency.
+
+At $p=0.001$, the recorded failures are 27, 4, and 1 for distances three, five, and seven, respectively. At $p=0.009$, they are 1058, 1506, and 1792. These counts illustrate why increasing distance can help at low physical error and hurt at high error. One failure out of 20,000 still has large relative uncertainty. @fig-surface-benchmark displays confidence intervals and the complete sampled grid.
+
+## Exercises and worked solutions
+
+### Exercise 1: Compare identical syndromes
+
+Compute the residual classes of masks `e=4` and `e=3` under the laboratory's integer convention. Why can no deterministic syndrome decoder always correct both?
+
+::: {.callout-note collapse="true"}
+## Solution
+
+Mask four is $X_3$, and mask three is $X_1X_2$. Both have syndrome integer three. The reference correction is mask four. Their residuals are zero and mask seven, respectively; the latter is odd-weight logical $X$. Identical input syndromes require an identical deterministic decision, so one class must lose. The optimal rule chooses the class with greater posterior mass, including all stabilizer-equivalent events.
+:::
+
+### Exercise 2: A learning ablation
+
+Why does the neural lab's advantage over minimum weight not establish that neural networks are required? Specify a stronger baseline.
+
+::: {.callout-note collapse="true"}
+## Solution
+
+The noise deliberately favors a particular pair burst that minimum weight ignores. A classical eight-entry table computed by exact enumeration achieves the same optimum; an empirical table estimated from the same training samples is also a direct comparator. At large size, compare with a correlation-aware conventional decoder receiving the same calibration information, including its runtime. The lab demonstrates probabilistic decision-making and explicit training, not a unique neural capability.
+:::
+
+### Exercise 3: A hidden logical burst
+
+Replace the burst $X_1X_2$ by $X_1X_2X_3$. What changes in the posterior, and can a syndrome decoder detect every such burst?
+
+::: {.callout-note collapse="true"}
+## Solution
+
+The burst has zero syndrome and odd logical parity, so its probability is added to $W_{0,1}$ instead of $W_{3,1}$. It is indistinguishable from a no-error event by stabilizer syndrome alone. The posterior for syndrome zero changes, but a single deterministic class choice cannot correct both possibilities with certainty. Additional physical flags would be new information.
+:::
+
+### Exercise 4: Extend the memory experiment
+
+Design an extension that tests both logical bases and distinguishes training cost from inference cost for a learned decoder.
+
+::: {.callout-note collapse="true"}
+## Solution
+
+Generate independent `rotated_memory_x` and `rotated_memory_z` circuits with the same stated noise conventions and distance/round grid. Record separate and combined metrics with uncertainty. Partition generated or device samples into training, validation, and locked test data, keep all representations and flags matched to the conventional baseline, report training data-generation and optimization costs, then time preprocessing, inference, exact repair, and output transfer separately and together. Memory tests in both bases still do not replace a logical-gate experiment.
+:::

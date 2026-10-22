@@ -1,0 +1,49 @@
+# Notation, conventions, and a decoder checklist {#sec-notation}
+
+## Symbols used throughout the book
+
+| Symbol | Meaning |
+|---|---|
+| $\mathbb F_2$ | Binary field; addition is XOR |
+| $e$, $f$ | Physical-error vector, circuit-fault vector |
+| $H$, $H_X$, $H_Z$ | Classical and CSS parity-check matrices |
+| $s$ | Syndrome, with eigenvalue $(-1)^{s_a}$ for check $a$ |
+| $D$, $L$ | Detector and logical-observable maps on circuit faults |
+| $d$ | Code distance, or a detector vector when explicitly indicated |
+| $n,k$ | Physical data qubits and logical qubits |
+| $[[n,k,d]]$ | Quantum-code parameters; ancillas are additional |
+| $\mathcal S$ | Stabilizer group, excluding $-I$ |
+| $N(\mathcal S)$ | Pauli normalizer, equivalently Pauli centralizer here |
+| $\bar X_i,\bar Z_i$ | Logical Pauli representatives |
+| $r_s$ | Chosen reference recovery with syndrome $s$ |
+| $\ell$ | Logical equivalence class relative to a chosen reference |
+| $p$, $p_L$ | A stated physical noise parameter and logical failure probability |
+| $T$ | Number of syndrome rounds, unless a gate $T$ is explicitly meant |
+| $\chi$ | Truncated tensor-network bond dimension |
+| $\theta$ | Trainable model parameters, or a stated coherent rotation angle |
+
+Contexts occasionally reuse common symbols such as $d$ or $L$; local definitions take precedence. Binary vectors are columns unless stated otherwise. Matrices multiply over $\mathbb F_2$ when they express syndrome or commutation relations. Probabilities and neural activations use ordinary real arithmetic. Code distance counts support, not a Euclidean norm.
+
+## Pauli and CSS conventions
+
+Ignoring overall phase, write $P(x,z)=X^xZ^z$. The choice differs from Hermitian $Y$ by a phase when both bits equal one; commutation is unaffected. The symplectic pairing is $x\cdot z'+z\cdot x'$ modulo two. For CSS matrices, $H_XH_Z^T=0$. $Z$ errors trigger $X$ checks and $X$ errors trigger $Z$ checks. Stating which component is decoded prevents a common transpose error.
+
+This book's stochastic depolarizing probability $p$ is the total probability of a nonidentity Pauli. It is not automatically the same parameter as in a replacement-by-maximally-mixed channel. A numerical comparison must convert conventions and include all noisy circuit locations.
+
+## The hierarchy of correctness checks
+
+A decoder implementation should distinguish these assertions:
+
+1. **Input correctness:** the syndrome or detector vector corresponds to the intended circuit and boundary conditions.
+2. **Consistency:** a proposed correction has the same syndrome, $H\hat e=s$, or matches the required detector parity.
+3. **Logical correctness:** the residual $e+\hat e$ belongs to the stabilizer class, or the predicted logical observable equals the true one.
+4. **Statistical correctness:** the measured logical risk and uncertainty use an independent, representative evaluation distribution.
+5. **Operational correctness:** the complete decoder meets the controller's memory, throughput, and reaction-time requirements.
+
+Passing consistency is necessary for an exact hard-syndrome correction but not sufficient for logical success. A direct logical-observable predictor need not output a physical correction at all; then its contract is the specified observable prediction. Approximate models should state how invalid outputs are handled rather than silently dropping them.
+
+## Reading a frontier claim
+
+Before comparing a new decoder to an established method, identify its inference target, information available, code family and sizes, measurement assumptions, noise process, baseline tuning, train/test partition, acceptance rules, accuracy uncertainty, and end-to-end cost. A statement such as “near maximum likelihood” needs a small-case oracle, a controlled approximation, or another explicit standard; agreement with a heuristic is not itself proof of optimality.
+
+The worked solutions appear immediately after each chapter's exercises. They are meant to expose the reasoning, including where a claim depends on an idealization. Recompute examples before extending them: binary indexing and boundary conventions are small implementation choices with large effects on decoding labels.

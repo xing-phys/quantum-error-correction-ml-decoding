@@ -1,0 +1,186 @@
+# Quantum LDPC codes: rate, distance, and connectivity {#sec-qldpc}
+
+## Why leave the plane?
+
+A surface-code patch protects one qubit using a number of data qubits proportional to the square of its distance. That is an excellent compromise when gates are local on a two-dimensional chip, but an expensive way to store hundreds of logical qubits. Can sparse checks coexist with a finite encoding rate and a distance proportional to the block size? The answer is yes. Understanding why this does not contradict the geometry of the surface code is the first task of this chapter.
+
+For a code family $\{[[n,k(n),d(n)]]\}$, **rate** is $R=k/n$, **relative distance** is $\delta=d/n$, and **asymptotically good** means both stay bounded away from zero as $n\to\infty$. A quantum low-density parity-check code, abbreviated qLDPC, has a generating set of stabilizers with bounded weight and a bounded number of generators touching each qubit. Both bounds must be independent of $n$. A sparse matrix at one finite block size is not, by itself, an asymptotic statement.
+
+The Bravyi–Poulin–Terhal tradeoff for geometrically local commuting constraints in two dimensions is $kd^2=O(n)$, with a constant depending on locality and local Hilbert-space dimension [@bravyi2010]. Consequently, constant-rate families in this setting cannot have diverging distance. Quantum LDPC constructions evade a geometric assumption: a bounded-degree interaction graph need not embed locally in a plane with bounded edge length. Crossing wires, atom transport, photonic links, or routing are physical resources. Algebraic sparsity does not make these resources free.
+
+::: {.callout-important}
+## Three separate promises
+
+A code may have good asymptotic parameters, an efficient decoder under ideal syndrome measurements, or a low-overhead fault-tolerant implementation. Each is a distinct claim. A theorem about the first does not establish the other two.
+:::
+
+## Chain complexes without algebraic-topology prerequisites {#sec-chain-complex}
+
+A linear map between binary vector spaces is just multiplication by a binary matrix. Consider
+
+$$
+C_2\xrightarrow{\partial_2}C_1\xrightarrow{\partial_1}C_0,
+\qquad \partial_1\partial_2=0.
+$$ {#eq-qldpc-chain}
+
+The names suggest faces, edges, and vertices, but no literal geometry is required. Put qubits on a basis of $C_1$. Choose $H_X=\partial_1$ and $H_Z=\partial_2^T$. Then $H_XH_Z^T=0$, exactly the CSS commutation condition. For $Z$ errors, $\partial_1 e$ is the syndrome. Errors in $\ker\partial_1$ have no syndrome. Those in $\operatorname{im}\partial_2$ are $Z$ stabilizers and act trivially. The logical $Z$ space is the quotient
+
+$$
+H_1=\ker\partial_1/\operatorname{im}\partial_2,
+\qquad
+k=\dim C_1-\operatorname{rank}\partial_1-\operatorname{rank}\partial_2.
+$$ {#eq-qldpc-homology}
+
+This quotient identifies vectors differing by a stabilizer. It is the same degeneracy that makes quantum decoding a problem of selecting a logical class rather than reconstructing a unique physical error. A homology class is therefore a physical equivalence class of undetectable operators. Distance is the smallest support of a nonzero class, including the dual problem for $X$ operators.
+
+Why is construction difficult? Choose a random sparse $H_X$. A generic independently chosen sparse row of $H_Z$ will overlap some $H_X$ rows oddly, violating commutation. Solving the commutation constraint often introduces short logical operators. Successful constructions build $\partial_1\partial_2=0$ structurally while separately controlling the quotient distance.
+
+## Deriving the hypergraph product {#sec-hypergraph-product}
+
+Take classical parity-check matrices $H_1\in\mathbb F_2^{m_1\times n_1}$ and $H_2\in\mathbb F_2^{m_2\times n_2}$. The hypergraph-product CSS matrices are
+
+$$
+H_X=\left[H_1\otimes I_{n_2}\ \middle|\ I_{m_1}\otimes H_2^T\right],
+\qquad
+H_Z=\left[I_{n_1}\otimes H_2\ \middle|\ H_1^T\otimes I_{m_2}\right].
+$$ {#eq-qldpc-hgp}
+
+There are $n=n_1n_2+m_1m_2$ qubits. The first block is indexed by pairs of classical bits and the second by pairs of checks. Multiply the two matrices:
+
+$$
+H_XH_Z^T=H_1\otimes H_2^T+H_1\otimes H_2^T=0.
+$$
+
+The cancellation is over $\mathbb F_2$, where an object added to itself vanishes. This is the algebraic version of a boundary having no boundary.
+
+Let $k_i=n_i-\operatorname{rank}H_i$ and $k_i^T=m_i-\operatorname{rank}H_i$. The transpose code has parity-check matrix $H_i^T$. Tensor-product homology gives
+
+$$
+k=k_1k_2+k_1^Tk_2^T.
+$$ {#eq-qldpc-hgp-k}
+
+One can see the first term by taking a nontrivial classical codeword direction in each factor. The second term arises from check dependencies in both factors. Full row rank removes the second term. If each classical matrix is sparse with bounded row and column weights, every product check and every qubit degree remains bounded. For a sufficient concrete set of hypotheses, take sparse full-row-rank component families with $n_i,m_i=\Theta(L)$, $k_i=\Theta(L)$, and classical distances $d_i=\Theta(L)$. Their product has $n=\Theta(L^2)$, $k=\Theta(L^2)$, and distance $d=\Theta(L)$: a constant-rate family with $d=\Theta(\sqrt n)$ [@TillichZemor2014]. A lower bound uses the minimum of the component and transpose-code distances, omitting trivial kernels; upper bounds require the corresponding nontrivial logical sectors. Quoting the minimum without these qualifications can be misleading for rectangular full-rank matrices.
+
+### A product you can inspect by hand
+
+Choose $H_1=H_2=(1\ 1)$, so $m_1=m_2=1$ and $n_1=n_2=2$. Then
+
+$$
+H_X=\begin{pmatrix}1&0&1&0&1\\0&1&0&1&1\end{pmatrix},\qquad
+H_Z=\begin{pmatrix}1&1&0&0&1\\0&0&1&1&1\end{pmatrix}.
+$$
+
+Both have rank two; $n=5$ and $k=1$. Every row of one has even overlap with every row of the other. The vector $z=(1,0,1,0,0)$ lies in $\ker H_X$ but outside the row space of $H_Z$, so a weight-two $Z$ logical exists. No weight-one vector is in the kernel because all columns of $H_X$ are nonzero. Repeating for $X$ shows this is a $[[5,1,2]]$ code. It detects any one-qubit Pauli error but cannot correct every one-qubit error: correction requires distance at least three. Sparse checks alone do not promise a useful distance.
+
+## Expansion and small-set flip
+
+A graph expands if every sufficiently small vertex set has many neighbors outside itself. Expansion supplies redundancy: a small error cannot hide in a small neighborhood. In a classical expander code, flipping a bit that violates more checks than it satisfies can reduce the syndrome weight. Quantum codes complicate this because a stabilizer may have zero syndrome despite nonzero weight, and a single-qubit greedy move can stall.
+
+Small-set-flip decoders inspect subsets of the support of a stabilizer generator, seeking a move that decreases syndrome weight efficiently. They exploit the local redundancy of suitable quantum expander constructions. The mathematical guarantee applies to specified graph-expansion conditions, error sizes, and measurement assumptions. It is not a guarantee for every sparse CSS code.
+
+A representative objective is
+
+$$
+\frac{|s|-|s+H_X f|}{|f|}>\eta,
+$$
+
+where $f$ is a candidate local $Z$ correction and $\eta$ is a positive progress criterion. The syndrome update is cheap because $f$ has bounded support. The difficult proof must show that a useful local move exists whenever the residual error is small modulo stabilizers. Counting physical error weight without reducing by stabilizers would make the claim false. Fawzi, Grospellier, and Leverrier connected expander-code decoding and fault-tolerance techniques to constant asymptotic space overhead under stated assumptions [@FawziGrospellierLeverrier2018]. The constants and connectivity remain central for engineering.
+
+## From square-root distance to good quantum codes
+
+Products over more structured algebra can identify or balance redundant degrees of freedom while retaining commutation. In a lifted product, matrices have entries in a group algebra: an entry represents a sum of permutation actions, later expanded to binary blocks. A lift replaces one algebraic site by many sites connected according to permutations. Noncommutative groups require care about left versus right actions so the relevant maps still commute.
+
+Panteleev and Kalachev established asymptotically good qLDPC families using lifted-product constructions over non-Abelian groups [@PanteleevKalachev2022]. This resolved the existence question for bounded-weight, bounded-degree stabilizer codes with $k=\Theta(n)$ and $d=\Theta(n)$. The result is a theorem about code families, not a claim that a particular short instance has the lowest hardware cost.
+
+Quantum Tanner codes use short local codes placed on a combinatorial complex with expansion. Local constraints must be mutually compatible, and a robustness property ensures that many local violations reveal an error rather than canceling misleadingly. Leverrier and Zémor developed efficient decoding of a constant fraction of the block length for appropriate good-code constructions [@LeverrierZemor2024]. Dinur, Hsieh, Lin, and Vidick constructed good qLDPC codes with linear-time decoders [@DinurEtAl2023]. Here linear time means asymptotic work in a specified classical computational model. It does not fix the memory traffic, parallel depth, circuit-level threshold, or prefactor at a useful block size.
+
+The conceptual chain is worth remembering:
+
+1. A chain-complex relation enforces commutation.
+2. Expansion and local-code robustness rule out short nontrivial logical operators.
+3. The same redundancy can provide a progress argument for a decoder.
+4. Faulty syndrome extraction adds a separate space-time inference problem.
+
+Only the first item follows directly from writing down CSS matrices.
+
+## Bivariate bicycle codes: an explicit algebraic family {#sec-bivariate-bicycle}
+
+Let $S_\ell$ and $S_m$ be cyclic shift matrices and define commuting permutations
+
+$$
+x=S_\ell\otimes I_m,\qquad y=I_\ell\otimes S_m.
+$$
+
+Choose sparse binary polynomials in $x,y$, represented by $L\times L$ matrices $A,B$, with $L=\ell m$. Since $x$ and $y$ commute, $AB=BA$. Define
+
+$$
+H_X=[A\ B],\qquad H_Z=[B^T\ A^T].
+$$ {#eq-qldpc-bb}
+
+Then $H_XH_Z^T=AB+BA=0$. There are $2L$ data qubits and
+
+$$
+k=2L-\operatorname{rank}[A\ B]-\operatorname{rank}[B^T\ A^T].
+$$
+
+The sparsity of $A$ and $B$ sets check weight and degree. It does not determine distance, which must be bounded or computed separately. Polynomial relations and periodic identifications create both useful symmetries and possible short logical operators.
+
+Bravyi and collaborators developed an end-to-end memory proposal with weight-six bivariate bicycle checks and a scheduled syndrome circuit [@BravyiEtAl2024]. Their $[[144,12,12]]$ example uses 144 data and 144 syndrome qubits. Their reported memory advantage and approximately $0.8\%$ threshold belong to their circuit noise and decoding protocol. The required degree-six interaction graph, consisting of two planar subgraphs, is a concrete connectivity specification; it is not a strictly local square-grid surface-code layout. Their arXiv revision records a simulation bug fix, illustrating why benchmark versions and code availability matter.
+
+Compare a fair resource question: at a specified physical noise process, target logical error per computation, gate set, and coupling layout, which architecture minimizes total space-time volume? Comparing only data-qubit counts or distances cannot answer it.
+
+## Why qLDPC decoding challenges learning systems
+
+For a CSS code with $k$ logical qubits, a full Pauli logical class has $4^k$ possibilities. A classifier with one output per class is therefore exponentially large when $k=\Theta(n)$. Surface-code demonstrations with one logical qubit often hide this difficulty because they need only two or four labels. Scalable alternatives predict a correction vector with an exact consistency layer, factorize logical variables autoregressively, or learn messages for a classical iterative decoder. None automatically removes long-range logical correlations.
+
+The combined $X/Z$ or quaternary Tanner graph also has short cycles imposed by commutation: overlapping opposite-type checks must overlap evenly. An individual CSS component graph need not contain those forced four-cycles. Independent bit beliefs may be wrong even when their marginals look calibrated. The decoder must select a jointly consistent representative and account for stabilizer degeneracy. BP-OSD and localized-statistics postprocessing are important reference methods, explained in [Belief propagation](09-belief-propagation.qmd).
+
+A graph network can share weights over differently sized graphs, but three tests are distinct: running on a larger graph; maintaining low logical error on that graph; and sustaining useful throughput with a fixed memory budget. A model that passes the first may fail the other two. Train/test separation should include block sizes and graph instances when claiming transfer across a code family.
+
+## Connectivity is a decoder input
+
+A high-weight check measured with a single bare ancilla can spread faults to several data qubits. An extraction schedule can introduce hook correlations absent in a data-only channel. Transport or routing adds idle time and extra fault locations. A decoder trained on independent data flips may consequently rank the wrong candidates even if it exactly solves that training distribution.
+
+The appropriate object is the complete measurement circuit, together with a noise model and a logical-observable definition. One can derive its detector map, then compare MWPM where a graphlike decomposition exists, BP-based methods on the fault matrix, and learned proposals with consistency checks. Nonlocal edges in the code graph may also be nonlocal communication in the classical decoder: parallel arithmetic does not eliminate communication latency.
+
+## Exercises and worked solutions
+
+### Exercise 1: Product dimensions
+
+Both classical matrices are full row rank, have $n_i=100$, $m_i=50$, and distance proportional to 100. Compute the product block length and logical-qubit count. What can and cannot be concluded about distance?
+
+::: {.callout-note collapse="true"}
+## Solution
+
+$n=100^2+50^2=12{,}500$, $k_i=50$, $k_i^T=0$, so $k=2{,}500$ and $R=0.2$. With a comparable family of suitable component codes, distance scales as the component length, hence as $\sqrt n$. The statement does not give the exact distance at this block length or a circuit-level threshold. Check sparsity and actual component distances before inferring LDPC properties or numerical correction strength.
+:::
+
+### Exercise 2: Commutation from polynomials
+
+Set $A=I+x+y$ and $B=I+x^2+y^2$ on a periodic $\ell\times m$ array. Show CSS commutation, and identify a small-size caveat when counting check weight.
+
+::: {.callout-note collapse="true"}
+## Solution
+
+$x$ and $y$ commute, so any polynomials in them commute and $AB+BA=0$. Normally each row of $A$ and $B$ has three ones and each concatenated check has weight six. For small periods, two monomials can represent the same shift and cancel over $\mathbb F_2$. For example $x^2=I$ when $\ell=2$, so the two identity terms in $B$ cancel. Count the expanded binary support, not the number of written monomials.
+:::
+
+### Exercise 3: An impossible planar promise
+
+A proposal claims bounded-range commuting checks in two dimensions, $k\geq0.1n$, and $d\geq0.01n$ for arbitrarily large $n$. Diagnose the contradiction and give two assumptions an implementation could change.
+
+::: {.callout-note collapse="true"}
+## Solution
+
+$kd^2\geq10^{-5}n^3$ contradicts $kd^2=O(n)$ under the stated locality assumptions. One can permit nonlocal couplings or an interaction range growing with size. Changing spatial dimension or leaving the class of static local commuting constraints changes the applicable theorem as well; each alternative needs its own resource analysis.
+:::
+
+### Exercise 4: Logical output size
+
+How many classes must a full logical-class classifier distinguish for a $[[144,12,12]]$ code? Suggest an output representation with polynomial size.
+
+::: {.callout-note collapse="true"}
+## Solution
+
+There are $4^{12}=16{,}777{,}216$ Pauli logical classes. A vector of 24 logical Pauli bits has linear size, although independent predictions discard correlations. An autoregressive model can represent their joint distribution using conditional probabilities; a correction-vector model can instead predict physical bits and enforce syndrome consistency. Both still need meaningful training and inference costs.
+:::

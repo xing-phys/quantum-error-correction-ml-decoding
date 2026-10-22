@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="628.2pt" height="208.44pt" viewBox="0 0 628.2 208.44" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-10-23T07:30:54.404004</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.10.7, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 208.44
+L 628.2 208.44
+L 628.2 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 12.78 125.976
+L 141.12 125.976
+Q 142.236 125.976 142.236 124.8
+L 142.236 60.12
+Q 142.236 58.944 141.12 58.944
+L 12.78 58.944
+Q 11.664 58.944 11.664 60.12
+L 11.664 124.8
+Q 11.664 125.976 12.78 125.976
+z
+" clip-path="url(#p2d9a25d15a)" style="fill: #f0f6f8; stroke: #087e8b; stroke-width: 1.5; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 169.02 125.976
+L 297.36 125.976
+Q 298.476 125.976 298.476 124.8
+L 298.476 60.12
+Q 298.476 58.944 297.36 58.944
+L 169.02 58.944
+Q 167.904 58.944 167.904 60.12
+L 167.904 124.8
+Q 167.904 125.976 169.02 125.976
+z
+" clip-path="url(#p2d9a25d15a)" style="fill: #f0f6f8; stroke: #087e8b; stroke-width: 1.5; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 325.26 125.976
+L 453.6 125.976
+Q 454.716 125.976 454.716 124.8
+L 454.716 60.12
+Q 454.716 58.944 453.6 58.944
+L 325.26 58.944
+Q 324.144 58.944 324.144 60.12
+L 324.144 124.8
+Q 324.144 125.976 325.26 125.976
+z
+" clip-path="url(#p2d9a25d15a)" style="fill: #f0f6f8; stroke: #087e8b; stroke-width: 1.5; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 481.5 125.976
+L 609.84 125.976
+Q 610.956 125.976 610.956 124.8
+L 610.956 60.12
+Q 610.956 58.944 609.84 58.944
+L 481.5 58.944
+Q 480.384 58.944 480.384 60.12
+L 480.384 124.8
+Q 480.384 125.976 481.5 125.976
+z
+" clip-path="url(#p2d9a25d15a)" style="fill: #f0f6f8; stroke: #087e8b; stroke-width: 1.5; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 143.119182 92.46
+Q 155.068906 92.46 165.34158 92.46
+" clip-path="url(#p2d9a25d15a)" style="fill: none; stroke: #526b7b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 160.14158 89.86
+L 165.34158 92.46
+L 160.14158 95.06
+z
+" clip-path="url(#p2d9a25d15a)" style="fill: #526b7b; stroke: #526b7b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 299.359182 92.46
+Q 311.308906 92.46 321.58158 92.46
+" clip-path="url(#p2d9a25d15a)" style="fill: none; stroke: #526b7b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 316.38158 89.86
+L 321.58158 92.46
+L 316.38158 95.06
+z
+" clip-path="url(#p2d9a25d15a)" style="fill: #526b7b; stroke: #526b7b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 455.599182 92.46
+Q 467.548906 92.46 477.82158 92.46
+" clip-path="url(#p2d9a25d15a)" style="fill: none; stroke: #526b7b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 472.62158 89.86
+L 477.82158 92.46
+L 472.62158 95.06
+z
+" clip-path="url(#p2d9a25d15a)" style="fill: #526b7b; stroke: #526b7b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_1">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #173548" transform="translate(38.200781 89.336516)">Physical noise</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #173548" transform="translate(17.776875 101.654109)">Pauli / circuit / analog</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #173548" transform="translate(192.569063 89.336516)">Measurements</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #173548" transform="translate(163.05125 101.654109)">syndromes and detectors</text>
+   </g>
+   <g id="text_3">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #173548" transform="translate(363.586016 89.336516)">Inference</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #173548" transform="translate(329.531563 101.654109)">logical-class posterior</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #173548" transform="translate(503.692969 89.336516)">Classical frame</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #173548" transform="translate(478.540781 101.654109)">logical action / feedback</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #087e8b" x="314.1" y="171.84" transform="rotate(-0 314.1 171.84)">Many physical errors share a syndrome. Many also have the same logical action.</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p2d9a25d15a">
+   <rect x="7.2" y="7.2" width="613.8" height="194.04"/>
+  </clipPath>
+ </defs>
+</svg>

@@ -1,0 +1,212 @@
+# Matching, clustering, and renormalization decoders {#sec-matching-decoders}
+
+## From a measurement record to an inference problem
+
+A surface-code decoder receives a noisy time series, not a picture of the error string. To convert that record into a problem with a precise objective, first identify combinations of measurement outcomes that are deterministic in the ideal circuit. An unexpected change in one of these combinations is a **detection event**. A detector is the specified parity; a detection event is its observed nonzero value. This distinction matters when reading simulator output: a detector exists on every shot even when it does not fire.
+
+For a stabilizer measured repeatedly, let $m_{a,t}\in\{0,1\}$ encode its sign at round $t$. In the simplest memory experiment an interior detector is
+
+$$
+d_{a,t}=m_{a,t}\oplus m_{a,t-1}.
+$$ {#eq-matching-detector-difference}
+
+A data fault between rounds changes a check value persistently. A measurement fault changes one recorded result transiently. Taking differences converts both into localized events. Initial and final detectors require the preparation and readout boundary conditions; simply discarding the first and last round leaves information unused and may create an incorrect inference problem.
+
+As a concrete example, consider a repetition memory with data bits $q_1,q_2,q_3$ and measured checks $Z_1Z_2$ and $Z_2Z_3$. An $X_2$ between rounds creates one event at each neighboring check in the same temporal layer. A wrong recorded value for check one at round $t$ creates events at $(1,t)$ and $(1,t+1)$. An $X_1$ creates a single bulk event, with its other endpoint at the spatial boundary. In a two-dimensional surface code, the same logic produces a three-dimensional space-time decoding graph.
+
+## The detector error model
+
+Label elementary independent stochastic fault mechanisms by $j$, with binary occurrence variables $f_j$ and probabilities $p_j$. A mechanism has a detector signature $D_{\cdot j}$ and a logical-observable signature $O_{\cdot j}$. Clifford propagation makes their combination linear over $\mathbb F_2$:
+
+$$
+d=Df,\qquad \ell=Of.
+$$ {#eq-matching-dem}
+
+Here $\ell$ records which logical measurement outcomes are flipped relative to an ideal reference. A decoder predicts $\hat\ell(d)$, and failure means $\hat\ell\ne\ell$. It need not reconstruct the microscopic fault vector. The same detector signature may arise from distinct mechanisms with different logical signatures, so both labels matter.
+
+One constructs $D$ and $O$ by inserting each allowed circuit fault, propagating its Pauli effect through subsequent Clifford gates, and recording flipped measurements. For independent single-qubit $X$ faults this is immediate. A two-qubit depolarizing channel has mutually exclusive Pauli outcomes at one location; treating all fifteen outcomes as independent Bernoulli variables is not exactly the same channel. A simulator or decoder must state how such exclusivity and correlations are represented or approximated. Stim provides efficient stabilizer-circuit sampling and detector error-model analysis [@gidney2021].
+
+The detector model is a classical description of a specified circuit and stochastic noise approximation. It does not automatically capture leakage, arbitrary coherent interference, slowly drifting parameters, or unmodeled long-range correlations. These require additional states, conditioning information, or a richer noise model.
+
+### Graphlike signatures
+
+A fault mechanism is **graphlike** when it flips at most two detectors. Two flips define an edge between detector vertices; one defines an edge to a compatible boundary; zero-detector mechanisms require special care because they can still flip a logical observable. A column with three or more ones is a **hyperedge**. Correlated two-qubit faults and color-code errors naturally generate hyperedges.
+
+For independent graphlike mechanisms with $0<p_j<1/2$, the negative log probability of a fault set differs from
+
+$$
+W(f)=\sum_j w_j f_j,
+\qquad
+w_j=\log\frac{1-p_j}{p_j}
+$$ {#eq-matching-edge-logodds}
+
+by a syndrome-independent constant. Thus the most probable individual fault configuration solves
+
+$$
+\min_{f:Df=d}\sum_jw_jf_j.
+$$ {#eq-matching-tjoin-objective}
+
+This is a minimum-weight **$T$-join** problem: the selected edges have odd degree at exactly the fired vertices $T$. Likelihood weights are not simply Euclidean distances. Spatial and temporal edges have different costs when gate and measurement errors differ, and long diagonal edges may encode a single propagated circuit fault.
+
+If two independent mechanisms have the same detector and observable signature, their net parity has probability
+
+$$
+p_{\mathrm{odd}}=p_1(1-p_2)+(1-p_1)p_2.
+$$
+
+They may be merged into one effective edge with this probability. Mechanisms with the same detector endpoints but different logical labels cannot generally be merged in this way without retaining the logical distinction. For $p>1/2$, a known reference flip can absorb the more likely event and shift both its syndrome contribution and logical frame, making the residual probability below one half. Negative weights should not be fed casually into a shortest-path implementation designed for nonnegative costs.
+
+## Why perfect matching solves a $T$-join
+
+Suppose first that there are no boundaries and $|T|$ is even. Compute the shortest-path distance $\delta(u,v)$ in the fault graph for every fired pair. Build a complete auxiliary graph on $T$ with those distances as edge weights. A perfect matching selects disjoint pairs covering all fired vertices exactly once. Replace each matched pair by a shortest path in the original graph and take the symmetric difference of all those paths.
+
+Why is this exact for @eq-matching-tjoin-objective? Any edge set with odd vertices $T$ can be decomposed into paths pairing the odd vertices plus cycles. With nonnegative weights cycles can be removed without increasing cost, and each path is at least as costly as the corresponding shortest path. This gives a lower bound by the optimal matching. Conversely, paths from any matching have the correct odd-vertex set after symmetric difference. Overlapping path segments cancel and cannot increase cost. The two inequalities establish equality of the optima.
+
+The result is exact for the **most probable configuration under the independent graph model**. It is generally not exact degenerate maximum-likelihood quantum decoding, which sums the probabilities of every configuration in each logical class. The distinction persists even if the matching solver is perfect. It also persists when two independently decoded CSS sectors discard $X$–$Z$ correlations.
+
+### A four-event example
+
+Place fired vertices at $a=(0,0)$, $b=(1,0)$, $c=(0,3)$, $d=(1,3)$ in a uniform square graph with unit edge costs. There are three pairings:
+
+| Pairing | Total shortest-path cost |
+|---|---:|
+| $(a,b),(c,d)$ | $1+1=2$ |
+| $(a,c),(b,d)$ | $3+3=6$ |
+| $(a,d),(b,c)$ | $4+4=8$ |
+
+Matching selects the first. Now suppose a rare-looking geometric separation is connected by a circuit-induced edge of cost $0.2$. The optimum can change. The decoder follows probabilistic evidence encoded in the graph, not visual closeness on the processor diagram.
+
+Even in a uniform lattice, shortest paths can be degenerate. Between $(0,0)$ and $(2,2)$ there are $\binom42=6$ length-four monotone paths. A single shortest-path representative does not account for this multiplicity. Incorporating entropy can improve logical decisions, although doing so independently for every matched pair does not automatically give the exact coset probability because paths interact and share edges.
+
+### Boundaries without spurious constraints
+
+A fired detector may pair with another fired detector or with an absorbing boundary. There is no requirement that each boundary absorb an even number of events. An auxiliary construction gives every fired vertex a private boundary copy, connects it at the shortest compatible boundary distance, and permits zero-cost matching among boundary copies as needed. Direct $T$-join implementations represent the boundary constraint more economically. A single global boundary vertex constrained to have even degree would impose a false parity condition.
+
+Only physically compatible boundaries can absorb a given type of event. For example, a $Z$ string in the convention of @sec-topological-codes can end at a rough boundary. Space-time windows also have temporal boundaries, whose treatment depends on which syndrome information is known and which decisions must remain revisable.
+
+## What the blossom algorithm contributes
+
+Greedily pairing the closest two events can be wrong: selecting one cheap pair may force an extremely expensive remaining pair. Global minimum-weight matching avoids this failure. Matching in a general graph is harder than matching in a bipartite graph because alternating augmenting-path searches encounter odd cycles. Edmonds' blossom method contracts such a cycle into a temporary vertex, continues the search, and later expands it to recover a valid matching.
+
+The optimization has a useful dual interpretation. Vertex and odd-set constraints acquire dual variables, and their values grow until edges become tight. Alternating trees explore tight edges. Contracting an odd cycle preserves the structure required for augmenting paths. This is why “use a greedy nearest-neighbor matcher” is not equivalent to “use blossom,” even if both begin by growing regions around defects.
+
+A textbook reduction that constructs every pairwise distance can allocate $O(|T|^2)$ auxiliary edges before matching begins. Modern QEC-specific implementations avoid this bottleneck by exploring a sparse weighted detector graph directly. Higgott and Gidney's **sparse blossom**, released in PyMatching version 2, integrates the geometric search with blossom operations. Their reported sub-microsecond per-round results at distance 17 and circuit depolarizing probability $0.1\%$ are measurements for a specified processor and benchmark, not a worst-case complexity guarantee [@higgott2025].
+
+Wu and Zhong's **Fusion Blossom** partitions matching work and merges subproblem states while preserving the global MWPM objective. Its emphasis is parallel throughput and streaming organization [@wu2023]. The central comparison is therefore not a new quantum likelihood objective versus an old one: both approaches accelerate weighted matching. Their practical costs depend on sparsity, defect density, partitioning, memory, and the host architecture. Near-linear empirical scaling at low noise must be distinguished from guarantees for adversarial dense syndromes.
+
+## A circuit-level matching experiment
+
+This executable Python example generates a rotated surface-code memory, samples detection events and observable flips, and decodes the same samples. Install `stim`, `pymatching`, and `numpy` in an isolated environment first. Dependency versions should be recorded with any published numerical result.
+
+```python
+import numpy as np
+import stim
+import pymatching
+
+circuit = stim.Circuit.generated(
+    "surface_code:rotated_memory_z",
+    distance=5,
+    rounds=5,
+    after_clifford_depolarization=0.001,
+    before_measure_flip_probability=0.001,
+    after_reset_flip_probability=0.001,
+    before_round_data_depolarization=0.001,
+)
+dem = circuit.detector_error_model(decompose_errors=True)
+matching = pymatching.Matching.from_detector_error_model(dem)
+sampler = circuit.compile_detector_sampler(seed=20261023)
+detectors, observables = sampler.sample(10000, separate_observables=True)
+predicted = matching.decode_batch(detectors)
+failed = np.any(predicted != observables, axis=1)
+print({"shots": len(failed), "failures": int(failed.sum()),
+       "failure_fraction": float(failed.mean()),
+       "stim": stim.__version__, "pymatching": pymatching.__version__})
+```
+
+`decompose_errors=True` requests graphlike decomposition where possible. A decomposition of one correlated mechanism into components does not mean the physical components became independent. Whether an implementation tracks or drops their correlation affects the decoder. The reported rate is failure per complete five-round memory experiment. It is not automatically a per-round rate, and 10,000 shots at small physical error probability may give too few failures for a precise comparison. No numerical output is hard-coded here: run it in the recorded environment and retain the actual counts.
+
+When timing this demonstration, separate circuit generation, detector-model extraction, matching-graph construction, sampling, and decoding. Setup time is amortized in a long-running experiment. Batch decoding throughput is useful for simulation, while online latency requires measuring how quickly each causally available decision emerges, including data transfer.
+
+## Union-find: exploit sparse clusters
+
+Union-find decoding replaces global weighted pairing by growing and merging local defect clusters. In its simplest graph formulation, start with one cluster per fired detector. A cluster is **odd** if it contains an odd number of events and has no absorbing boundary. Grow odd clusters until they touch other clusters or a boundary, merging them and updating parity. When every cluster is even or boundary-connected, find a correction supported inside the grown region by erasure decoding.
+
+The key observation is that a connected finite graph supports a chain with a prescribed syndrome exactly when the total syndrome parity is even; with an absorbing boundary, the unmatched parity can leave through that boundary. Growth therefore constructs regions in which a solution exists. The disjoint-set union structure supports near-constant amortized component queries and merges. Delfosse and Nickerson prove an almost-linear $O(n\alpha(n))$ bound for their algorithm and establish bounded-weight and erasure-correction guarantees [@delfosse2021]. This theorem does not assert that every hardware implementation or weighted extension has identical constants or runtime behavior.
+
+### Why peeling works
+
+Choose a spanning tree of a grown cluster. Take a leaf $v$ with parent $u$. If the syndrome at $v$ is one, select edge $(v,u)$ and flip the residual syndrome at $u$. If it is zero, do not select that edge. Remove the leaf and continue. At the end an even cluster leaves zero syndrome at the root. A boundary root may absorb a remaining one. Every selected edge makes the removed leaf correct forever, so induction proves the algorithm.
+
+```text
+clusters <- individual defects, plus known erasure regions if present
+while some cluster is odd and not boundary connected:
+    grow active cluster frontiers according to the chosen rule
+    merge any touching clusters; update syndrome parity and boundary flag
+forest <- a spanning forest of the grown graph
+for each tree, remove leaves toward a chosen root:
+    if leaf syndrome is 1:
+        include its parent edge and flip parent syndrome
+return selected edges and their accumulated logical labels
+```
+
+Uniform growth approximates geometric distance, whereas likelihood-weighted growth tries to respect nonuniform edge costs. Weighted designs require precise rules for partial edges, simultaneous collisions, and merging; an informal growth picture is not a full specification. Union-find often trades some logical accuracy for simpler and more parallel local processing. The size of rare connected clusters, rather than just average defect density, controls latency tails.
+
+## Renormalization: decode scale by scale
+
+Real-space renormalization offers another response to locality. Partition the lattice into small blocks. Enumerate the errors inside each block conditional on its observed syndrome, then summarize their effect by **boundary charge** variables describing how strings leave the block. Merge neighboring blocks and repeat. Short error strings are resolved early; long-range ambiguity survives as a coarse variable.
+
+To see the probabilistic operation, split a block error into internal variables $e_{\mathrm{int}}$ and boundary labels $b$. Its effective weight is
+
+$$
+Q_B(b\mid s_B)\propto
+\sum_{e_{\mathrm{int}}}P_B(e_{\mathrm{int}},b)
+\mathbf1[H_B(e_{\mathrm{int}},b)=s_B].
+$$ {#eq-rg-block-marginal}
+
+The sum retains entropy within each coarse boundary class. A hard-decision renormalization step would keep only its most likely representative and lose that information. Adjacent blocks share boundary variables, so independently multiplying block posteriors can double-count priors or violate consistency. Belief propagation between blocks is one way to approximately enforce agreement. This is the approach developed by Duclos-Cianci and Poulin [@duclos2010].
+
+Suppose each level increases block size by a fixed factor. There are $O(\log L)$ sequential scales; work within one scale may be parallelized. This depth statement is not an $O(\log L)$ total-work statement. Reading $O(L^2)$ syndrome bits already requires extensive work. Block state space grows exponentially with boundary size, so practical schemes keep small blocks or truncate boundary distributions. The approximation is the price of efficiency.
+
+Renormalization and union-find share the idea that low-noise errors form local structures, but their summaries differ. Union-find tracks connectivity and parity, then chooses a supported chain. Probabilistic renormalization propagates distributions of boundary classes. Neither is automatically equivalent to maximum-likelihood decoding, and both can be improved by learned growth rules, soft information, or more accurate local inference.
+
+## Correlations, hyperedges, and hybrid decoders
+
+The graph objective is a powerful baseline precisely because its assumptions are explicit. A fault flipping four detectors cannot generally be replaced by two independent edges while preserving its probability: the two components should occur together. A $Y$ fault likewise couples CSS sectors. Treating all components independently changes the posterior, sometimes substantially.
+
+One strategy runs belief propagation on the full fault-factor model to estimate conditional fault probabilities, then uses the resulting soft information to reweight graph edges before matching or cluster decoding. Higgott and collaborators call these **belief-matching** and **belief-find** [@higgott2023]. Their circuit-noise benchmarks demonstrate that improving the noise inference can help even when the final combinatorial solver is unchanged. The numerical improvement is conditional on the circuit and noise model, not a universal threshold increment.
+
+Other strategies use correlated matching passes, local hyperedge enumeration, integer optimization, or learned corrections. The questions to ask are concrete: which dependencies are retained, what inference objective is optimized, how is syndrome consistency guaranteed, and what happens when soft information is badly calibrated? A neural graph reweighter can preserve the final matching solver's hard constraint while losing its original probabilistic interpretation if arbitrary outputs no longer correspond to calibrated log odds.
+
+## Exercises
+
+### Exercise: temporal detectors
+
+A check's ideal record is $00000$. A measurement bit flip changes only the third recorded result. A data error after round two instead changes the ideal check sign for all subsequent rounds. Compute the interior difference detectors in both cases.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The measurement fault gives record $00100$ and successive differences $0110$. The persistent data fault gives $00111$ and differences $0100$. A single measurement fault produces two temporally adjacent events. A data fault changes the time boundary of a spatial error string. Final data readout supplies extra endpoint constraints in a complete memory circuit.
+:::
+
+### Exercise: a greedy matching failure
+
+Four vertices on a line lie at coordinates $0,2,3,5$. Compare greedy closest-pair matching with the global optimum using ordinary distance weights.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+Greedy first pairs $2$ with $3$ at cost one, forcing $0$ with $5$ at cost five, total six. Pairing $(0,2)$ and $(3,5)$ costs four and is optimal. The example requires no two-dimensional geometry or quantum degeneracy: it is a purely combinatorial failure of greediness.
+:::
+
+### Exercise: merge parallel mechanisms
+
+Two independent mechanisms with the same detector and logical signature have probabilities $0.01$ and $0.02$. Compute the effective odd-parity probability and weight. Explain why using $p=0.03$ is approximate.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+$p_{\mathrm{odd}}=0.01(0.98)+0.99(0.02)=0.0296$. Thus $w=\log(0.9704/0.0296)\approx3.490$. The sum $0.03$ counts the double-fault outcome as odd when the two identical signatures actually cancel; the difference is $2p_1p_2=0.0004$. If their observable signatures differed, the cancellation would have a different logical effect and this merge would be invalid.
+:::
+
+### Exercise: erasure decoding on a tree
+
+A four-vertex path $a-b-c-d$ has syndrome $(1,0,0,1)$ and no boundaries. Apply peeling from the ends. Then replace the syndrome by $(1,0,0,0)$.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The first leaf $a$ selects $ab$ and flips $b$ to one. Peeling $b$ selects $bc$ and flips $c$ to one; peeling $c$ selects $cd$ and cancels $d$. All three edges are selected. In the second case the same propagation leaves syndrome one at the final root, proving no solution exists inside this boundary-free component. Growth must connect it to another odd component or an absorbing boundary.
+:::

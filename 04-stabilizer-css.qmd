@@ -1,0 +1,272 @@
+# Stabilizer and CSS codes: the algebra of protected information {#sec-stabilizer-css}
+
+The quantum codes constructed so far were specified by logical basis vectors. That description is intuitive for three or nine qubits but becomes unwieldy for a code whose Hilbert space has dimension $2^n$. Stabilizer codes replace exponentially many amplitudes by a collection of commuting Pauli constraints. The resulting formalism gives efficient descriptions of code spaces, measured syndromes, logical operators, and many encoding circuits. It also identifies the precise statistical decision problem that a quantum decoder must solve.
+
+The stabilizer framework was developed through the work of Gottesman and the algebraic coding constructions of Calderbank, Rains, Shor, and Sloane [@gottesman1997; @calderbank1997]. We derive the framework rather than assuming group theory. The binary matrices introduced here are the common interface between quantum-code design and conventional or learned decoders.
+
+## Pauli operators and commuting constraints {#sec-stabilizer-definition}
+
+The $n$-qubit Pauli group consists of tensor products of $I,X,Y,Z$, with overall phases $\pm1,\pm i$. The weight of a Pauli is the number of nonidentity tensor factors. Two Paulis either commute or anticommute. Anticommutation arises once for each site where their nonidentity single-qubit factors differ; the overall sign is the parity of that count.
+
+Choose independent Hermitian commuting Paulis $g_1,\ldots,g_m$ and define their simultaneous $+1$ eigenspace. Their products form the stabilizer group $\mathcal S$. We require $-I\notin\mathcal S$, because no state has eigenvalue $+1$ under $-I$. Independence means that no nonempty product of the chosen generators is $I$. The group then has $2^m$ elements.
+
+The projector onto the code is
+
+$$
+P=\prod_{a=1}^m\frac{I+g_a}{2}
+=\frac1{2^m}\sum_{g\in\mathcal S}g.
+$$ {#eq-stabilizer-projector}
+
+Each factor is a projector and the factors commute. Every nonidentity Pauli has zero trace, so $\operatorname{tr}P=2^n/2^m=2^{n-m}$. Thus the code encodes $k=n-m$ logical qubits. A list of redundant generators has the same code space; it is the number of independent constraints, not the number of measurement outcomes, that determines $k$.
+
+If an error $E$ commutes with generator $g_a$, its eigenvalue remains $+1$. If it anticommutes, then $g_aE\ket\psi=-E\ket\psi$ on the code. The syndrome is therefore a list of commutation signs. Measuring the generators does not distinguish different logical states because they share all those signs.
+
+An operator commuting with every stabilizer preserves the code space. Some such operators are themselves stabilizers and act trivially. Others implement nontrivial logical gates while producing no syndrome. This is the algebraic origin of undetected logical errors.
+
+## Binary symplectic representation {#sec-symplectic}
+
+Represent a Pauli, ignoring its overall phase, by a binary vector $e=(x\mid z)\in\mathbb F_2^{2n}$. On site $i$, the pairs $00,10,01,11$ represent $I,X,Z,Y$. A Hermitian representative is
+
+$$
+P(x,z)=i^{\sum_i x_iz_i}\bigotimes_i X_i^{x_i}Z_i^{z_i}.
+$$
+
+The integer sum in the phase counts $Y$ factors; binary arithmetic is used in the vector labels. Multiplication of Pauli labels is vector addition. The phase discarded by this representation matters for circuit simulation and signed stabilizer states, but not for syndrome computation or logical equivalence modulo global phase.
+
+For $e=(x\mid z)$ and $f=(x'\mid z')$, define the symplectic product
+
+$$
+\langle e,f\rangle_{\mathrm{sp}}=x\cdot z'+z\cdot x'
+=e\Omega f^T,\qquad
+\Omega=\begin{pmatrix}0&I_n\\I_n&0\end{pmatrix}.
+$$ {#eq-stabilizer-symplectic}
+
+Then $P(e)P(f)=(-1)^{\langle e,f\rangle_{\mathrm{sp}}}P(f)P(e)$. To derive this, commute the $Z$ part of the first operator past the $X$ part of the second, producing $(-1)^{z\cdot x'}$, and compare the reversed order, which produces $(-1)^{z'\cdot x}$. Their ratio gives the displayed sign. There is no geometry of real angles here; the word symplectic refers to this nondegenerate bilinear form.
+
+Collect stabilizer generator labels into a row matrix $M=(M_X\mid M_Z)$. Commutation requires
+
+$$
+M\Omega M^T=0.
+$$ {#eq-stabilizer-commutation}
+
+For an error column $e=(x^T,z^T)^T$, the syndrome is
+
+$$
+s=M\Omega e=M_Xz+M_Zx.
+$$ {#eq-stabilizer-syndrome}
+
+These equations explain why binary linear algebra appears in quantum error correction. They also expose a restriction absent from arbitrary classical parity checks: the rows must be symplectically orthogonal. Sparse quantum parity-check constructions must satisfy this constraint while retaining good distance and useful connectivity.
+
+### Logical operators as a quotient space
+
+Let $S$ be the row space of $M$. The labels of Paulis commuting with every stabilizer form its symplectic orthogonal space $S^{\perp_{\mathrm{sp}}}$, often called the Pauli normalizer or centralizer in this context. Because $\Omega$ is invertible,
+
+$$
+\dim S^{\perp_{\mathrm{sp}}}=2n-(n-k)=n+k.
+$$
+
+We have $S\subseteq S^{\perp_{\mathrm{sp}}}$ by commutation. Labels differing by a vector in $S$ act identically on the code, up to global phase. The logical Pauli space is therefore
+
+$$
+S^{\perp_{\mathrm{sp}}}/S,
+\qquad
+\dim(S^{\perp_{\mathrm{sp}}}/S)=2k.
+$$ {#eq-stabilizer-logical-quotient}
+
+It contains $4^k$ classes, represented by products of $k$ logical $\overline X_j$ and $k$ logical $\overline Z_j$. They can be chosen with the familiar commutation relations: $\overline X_j$ anticommutes with $\overline Z_j$ and commutes with the logical operators of other qubits. Finding them reduces to null-space computation followed by symplectic basis reduction.
+
+The stabilizer distance is
+
+$$
+d=\min\{|P(e)|:e\in S^{\perp_{\mathrm{sp}}}\setminus S\}.
+$$ {#eq-stabilizer-distance}
+
+A low-weight stabilizer is harmless and does not reduce distance. A low-weight centralizer element outside the stabilizer is a dangerous logical error. This distinction is a practical source of mistakes when checking a code numerically.
+
+### Clifford gates preserve this representation
+
+A Clifford unitary maps Paulis to Paulis under conjugation. On binary labels, a Hadamard on site $i$ exchanges $x_i,z_i$. The phase gate $\operatorname{diag}(1,i)$ maps $x_i$ to itself and $z_i$ to $z_i+x_i$. A controlled-NOT with control $c$ and target $t$ gives
+
+$$
+x_t\leftarrow x_t+x_c,
+\qquad z_c\leftarrow z_c+z_t,
+$$
+
+while $x_c,z_t$ stay fixed. For example, $X_c$ spreads to $X_cX_t$, whereas $Z_t$ spreads to $Z_cZ_t$. These transformations preserve symplectic products and hence commutation. Tracking the associated signs as well as labels gives an efficient stabilizer tableau simulation. Tracking labels alone suffices to propagate Pauli faults through a Clifford syndrome circuit, but cannot determine arbitrary quantum amplitudes or non-Clifford dynamics.
+
+## CSS codes from two classical codes {#sec-css-construction}
+
+A Calderbank–Shor–Steane code chooses separate $X$-type and $Z$-type generators. Let their support matrices be $H_X$ and $H_Z$. Its stabilizer matrix is
+
+$$
+M=\begin{pmatrix}H_X&0\\0&H_Z\end{pmatrix}.
+$$
+
+The condition for all checks to commute is
+
+$$
+H_XH_Z^T=0.
+$$ {#eq-css-orthogonality}
+
+Every $X$ check must overlap every $Z$ check on an even number of qubits. The code parameters and syndrome equations are
+
+$$
+k=n-\operatorname{rank}H_X-\operatorname{rank}H_Z,
+\qquad s_X=H_Xz,\qquad s_Z=H_Zx.
+$$ {#eq-css-dimension-syndrome}
+
+Our subscript convention names a check by the Pauli it measures: $s_X$ detects phase components and $s_Z$ detects bit components. Some papers name syndromes by the error type instead. Read this convention before comparing equations.
+
+In classical-code language, define $C_X=\ker H_X$ and $C_Z=\ker H_Z$. Commutation is equivalent to $C_Z^\perp\subseteq C_X$, or $C_X^\perp\subseteq C_Z$. Then $k=\dim C_X+\dim C_Z-n$. Calderbank–Shor and Steane constructions established this bridge between classical codes and quantum protection [@calderbank1996; @steane1996]. The advantage is conceptual separation of bit and phase constraints, while the cost is the orthogonality condition linking their designs.
+
+Pure $X$ logical labels lie in $\ker H_Z$ but outside $\operatorname{row}H_X$. Pure $Z$ logical labels lie in $\ker H_X$ but outside $\operatorname{row}H_Z$. Thus
+
+$$
+\begin{aligned}
+d_X&=\min\{|x|:x\in\ker H_Z\setminus\operatorname{row}H_X\},\\
+d_Z&=\min\{|z|:z\in\ker H_X\setminus\operatorname{row}H_Z\},
+\qquad d=\min(d_X,d_Z).
+\end{aligned}
+$$ {#eq-css-distances}
+
+For the last equality, any nontrivial mixed logical Pauli must have a nontrivial $x$ or $z$ class; its union support is at least the weight of that component. Conversely, a minimum pure logical operator is already a valid full Pauli logical operator.
+
+Separate constraints do not imply independent noise. Under a depolarizing channel with total nonidentity probability $p$, the joint distribution of $(x_i,z_i)$ is $P(00)=1-p$ and $P(10)=P(01)=P(11)=p/3$. Both component marginals have error probability $2p/3$, but their joint probability $P(11)=p/3$ differs from $(2p/3)^2$. Independent $X$ and $Z$ decoding discards this correlation. A joint or hybrid decoder can use it even when the code itself is CSS.
+
+## The Steane code in full detail {#sec-steane-code}
+
+Set $H_X=H_Z=H$, using the Hamming matrix from @eq-classical-hamming-h. Each row has weight four, so its binary dot product with itself is zero. Each pair of different rows overlaps on two coordinates, so their dot product also vanishes. Therefore $HH^T=0$. The two rank-three check families encode $k=7-3-3=1$ logical qubit.
+
+Writing tensor factors in qubit order gives six independent generators:
+
+$$
+\begin{array}{lll}
+XIXIXIX,&IXXIIXX,&IIIXXXX,\\
+ZIZIZIZ,&IZZIIZZ,&IIIZZZZ.
+\end{array}
+$$ {#eq-steane-generators}
+
+Let $D=\operatorname{row}H=C^\perp$ for the classical Hamming code $C=\ker H$. The eight words of $D$ are
+
+$$
+\begin{array}{rrrr}
+0000000,&1010101,&0110011,&0001111,\\
+1100110,&1011010,&0111100,&1101001.
+\end{array}
+$$
+
+Every nonzero word has weight four. Define $u=1111111$. Since every row of $H$ has even weight, $Hu=0$, so $u\in C$. But $u\notin D$, because its weight is odd. The logical codewords are
+
+$$
+\ket{0_L}=\frac1{\sqrt8}\sum_{v\in D}\ket v,
+\qquad
+\ket{1_L}=\frac1{\sqrt8}\sum_{v\in D}\ket{v+u}.
+$$ {#eq-steane-logical-states}
+
+An $X$ generator translates $v$ by a row of $H$, permuting the eight terms and leaving each sum invariant. A $Z$ generator multiplies each term by $(-1)^{h\cdot v}$, which is $+1$ because $D\subseteq C$ and $h\cdot u=0$. The two sums have disjoint supports because $u\notin D$, so they are orthogonal. This explicitly verifies both encoding dimension and all stabilizer constraints.
+
+Logical $\overline X=X^{\otimes7}$ swaps the two sums. Logical $\overline Z=Z^{\otimes7}$ has eigenvalue $+1$ on the even-weight words of $D$ and $-1$ on their odd-weight complements. Their odd overlap makes them anticommute. Multiplying either by the appropriate weight-four stabilizer $IIIXXXX$ or $IIIZZZZ$ gives equivalent representatives $XXXIIII$ and $ZZZIIII$ of weight three. No weight-one or weight-two vector lies in $\ker H$, by the Hamming-column argument. Thus the quantum code has parameters $[[7,1,3]]$.
+
+### Decode a $Y$ error explicitly
+
+If $Y_5$ occurs, then $x=z=(0,0,0,0,1,0,0)^T$. Both check families return column five of $H$, namely $(1,0,1)^T$. A simple decoder selects $X_5$ from $s_Z$ and $Z_5$ from $s_X$. Their product is $Y_5$ up to phase and corrects the error.
+
+Suppose instead that $X_1X_2$ occurs. Its syndrome is column one plus column two, which equals column three. A single-error decoder applies $X_3$, leaving $X_1X_2X_3$. This commutes with every check but is a nontrivial logical $\overline X$. All subsequent perfect syndrome measurements return zero, although the encoded quantum state has changed. A small syndrome does not imply a small logical error, and zero syndrome does not prove successful recovery.
+
+### A compact numerical verification
+
+The following Python calculation checks the commuting constraints, enumerates the relevant classical spaces, verifies the logical support, and confirms distance three. Enumerating all $2^7$ words is sufficient here because the two CSS components have identical matrices. For a general stabilizer code, one must enumerate or otherwise search the full symplectic centralizer.
+
+```python
+import itertools
+import numpy as np
+H = np.array([[1,0,1,0,1,0,1],
+              [0,1,1,0,0,1,1],
+              [0,0,0,1,1,1,1]], dtype=int)
+assert np.all((H @ H.T) % 2 == 0)
+words = [np.array(v, dtype=int)
+         for v in itertools.product((0, 1), repeat=7)]
+C = {tuple(v) for v in words if np.all((H @ v) % 2 == 0)}
+D = {tuple((np.array(a) @ H) % 2)
+     for a in itertools.product((0, 1), repeat=3)}
+assert len(C) == 16 and len(D) == 8 and D <= C
+assert min(sum(v) for v in C - D) == 3
+logical = np.array([1,1,1,0,0,0,0])
+assert tuple(logical) in C - D
+assert int(logical @ logical) % 2 == 1  # logical X/Z anticommute
+zero_support = D
+one_support = {tuple((np.array(v) + 1) % 2) for v in D}
+assert zero_support.isdisjoint(one_support)
+```
+
+One can also build $128$-component state vectors and the full check matrices to verify the same relations. The binary method scales better and makes the reason for each relation visible.
+
+## Quantum decoding is inference over logical classes {#sec-logical-map}
+
+Fix a syndrome $s$ and choose any reference error $T_s$ with that syndrome. Every compatible Pauli can be written, up to global phase, as
+
+$$
+E=T_s Lg,
+\qquad L\in\mathcal L,\quad g\in\mathcal S,
+$$ {#eq-stabilizer-error-decomposition}
+
+where $\mathcal L$ contains one representative of each of the $4^k$ logical Pauli classes. To see this, $T_s^\dagger E$ has zero syndrome and therefore lies in the centralizer; quotienting by the stabilizer leaves its logical class. There are $2^{n+k}$ compatible binary Pauli labels, partitioned into $4^k$ classes of size $2^{n-k}$.
+
+For a stochastic Pauli channel, define the class weight
+
+$$
+Z_L(s)=\sum_{g\in\mathcal S}P(T_sLg),
+\qquad P(L\mid s)=\frac{Z_L(s)}{\sum_{L'}Z_{L'}(s)}.
+$$ {#eq-stabilizer-class-posterior}
+
+The optimal decoder for logical zero-one loss chooses the largest class weight, then applies an inverse representative of that class and syndrome. This is **degenerate maximum-likelihood decoding**, or logical maximum-a-posteriori decoding when the posterior interpretation is emphasized. The reference $T_s$ only relabels classes; it cannot change the optimal success probability.
+
+Choosing the most probable individual error can disagree with choosing the most probable class. A class whose largest member has conditional probability $0.18$ may lose to another class containing two members with probabilities $0.12$ each. The correct comparison is the total probability of every member, not the smallest weight alone. In statistical mechanics, $-\log P(E)$ acts as energy and the number of comparable members supplies an entropy contribution. Optimization over representatives captures an energy minimum; class summation computes a free-energy-like quantity.
+
+This changes training targets. A supervised model trained to reproduce one sampled physical error is penalized for outputting a different error from the same stabilizer class, even though recovery would succeed. Conversely, a model that outputs the correct syndrome but the wrong logical class fails the memory. Suitable losses may predict logical labels, sum over equivalent representatives, or combine a learned probability model with an exact syndrome-consistency step. The output representation and objective are physical design choices.
+
+To evaluate a decoder in a simulation, compute the residual label $r=e+\hat e$. First require $M\Omega r=0$, which checks syndrome consistency. Then test whether $r\in S$, using binary row reduction. Success does not require $r=0$. If $r$ lies in the centralizer outside $S$, the decoder has made a logical error. This two-stage test is more reliable than comparing predicted and sampled error strings directly.
+
+The class-probability formula assumes stochastic Pauli noise. For a general coherent channel, the relevant objects are logical quantum operations conditioned on syndromes, with amplitudes and cross terms. A Pauli decoder can still be useful, but optimality cannot be claimed from @eq-stabilizer-class-posterior without the noise assumption.
+
+## Exercises with worked solutions
+
+### Exercise 1: binary commutation
+
+Represent $P=X_1Y_2Z_4$ and $Q=Z_1X_2X_3$ on four qubits in binary symplectic form. Do they commute? Verify the answer site by site.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+For $P$, $x=(1,1,0,0)$ and $z=(0,1,0,1)$. For $Q$, $x'=(0,1,1,0)$ and $z'=(1,0,0,0)$. The symplectic product is $x\cdot z'+z\cdot x'=1+1=0$ modulo two. They commute. Sites one and two each contribute one minus sign, while sites three and four have an identity in one of the operators. The two signs cancel.
+:::
+
+### Exercise 2: a purported CSS code
+
+Take $H_X=(1,1,0)$ and $H_Z=(0,1,1)$. Does this define a CSS stabilizer code? Replace $H_Z$ by a nonzero row on the same three qubits that does commute and determine $k$.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The overlap is one, so $H_XH_Z^T=1$ and the two proposed checks anticommute. There is no simultaneous eigenspace with both eigenvalues $+1$. Choosing $H_Z=(1,1,0)$ gives even overlap and two independent Pauli constraints, $X_1X_2$ and $Z_1Z_2$. Then $k=3-1-1=1$. The encoded qubit can live entirely on qubit three, so distance is one. Commutation and nonzero dimension do not by themselves ensure useful protection.
+:::
+
+### Exercise 3: equivalent logical representatives
+
+For the Steane code, verify that $X^{\otimes7}$ and $X_1X_2X_3$ are equivalent. Can $X_1$ be equivalent to them? Give an algebraic reason.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+Their product is $X_4X_5X_6X_7$, one of the $X$ stabilizer generators, so they act identically on the code. $X_1$ has nonzero $Z$-check syndrome equal to column one of $H$. Multiplying a logical operator by a stabilizer cannot change its syndrome. Hence $X_1$ cannot belong to this zero-syndrome logical class.
+:::
+
+### Exercise 4: the correct success test
+
+A Steane-code simulation samples error $X_1$ and a decoder outputs correction $X_1X_4X_5X_6X_7$. Is the prediction wrong? What if it outputs $X_2X_3$ instead?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The first residual is $X_4X_5X_6X_7$, a stabilizer, so the correction succeeds despite predicting a different physical string. The second residual is $X_1X_2X_3$, a logical $\overline X$, so it fails. Both proposed corrections have the same syndrome as the actual error. This separates syndrome validity, microscopic prediction accuracy, and logical correctness.
+:::
+
+### Exercise 5: exploit a correlated prior
+
+At a single site under depolarizing noise, compute $P(z=1\mid x=1)$ and $P(z=1\mid x=0)$. Explain why a decoder that has strong evidence for an $X$ component may want to revise its phase-error probabilities.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The first probability is $(p/3)/(2p/3)=1/2$ for $p>0$. The second is $(p/3)/(1-2p/3)=p/(3-2p)$. At small $p$, these are very different. Evidence for an $X$ component makes a simultaneous $Z$ component much more plausible because $Y$ is one of the three equally probable nonidentity events. A joint decoder or an iterative exchange of reliability information can use this correlation, whereas two fixed independent priors cannot.
+:::

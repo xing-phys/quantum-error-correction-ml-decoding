@@ -1,0 +1,333 @@
+# Belief propagation and reliability-guided decoding {#sec-belief-propagation}
+
+## The inference problem behind a Tanner graph
+
+Matching uses a special geometric structure: each elementary fault has at most two detector endpoints. Belief propagation (BP) instead uses a **factorization of probability**. It can therefore act on arbitrary sparse parity-check matrices, including quantum LDPC codes with no planar embedding and detector error models with hyperedges. Its speed comes from replacing a global probability distribution by local messages. Its weaknesses come from exactly the same replacement.
+
+Begin with a binary component of a CSS code. The unknown error is $e\in\mathbb F_2^n$, checks are rows of $H$, and the observed syndrome is $s=He$. Assume initially that error bits are independent, with $P_j(e_j=1)=p_j$. Bayes' rule gives
+
+$$
+P(e\mid s)=\frac1{Z_s}
+\prod_j P_j(e_j)
+\prod_a\mathbf1\left[\bigoplus_{j\in N(a)}e_j=s_a\right],
+$$ {#eq-bp-posterior-factorization}
+
+where $N(a)=\{j:H_{aj}=1\}$ and $Z_s$ is the syndrome probability. The **Tanner graph** has a variable node for each $e_j$, a check node for each row $a$, and an edge when $H_{aj}=1$. A parity check may connect to many variables; it is a factor node, not an ordinary fault edge in a matching graph.
+
+The model is exact under the stated independence assumptions. BP on this model need not be exact, because the Tanner graph can contain cycles. These are separate approximations. A correlated prior can be represented by extra factors, but the messages and complexity then change.
+
+## Deriving sum-product messages
+
+Let $q_{j\to a}(b)$ summarize the evidence that variable $j$ equals $b$ from the rest of the graph excluding check $a$. Let $r_{a\to j}(b)$ summarize the evidence from check $a$ and its other neighbors. On a tree, deleting an edge disconnects the graph into two independent subtrees. Their likelihoods multiply at variable nodes and sum over unobserved values at check nodes. Thus
+
+$$
+q_{j\to a}(b)\propto P_j(b)
+\prod_{c\in N(j)\setminus a}r_{c\to j}(b),
+$$ {#eq-bp-variable-message}
+
+$$
+r_{a\to j}(b)\propto
+\sum_{\{e_k:k\in N(a)\setminus j\}}
+\mathbf1\left[b\oplus\bigoplus_{k\ne j}e_k=s_a\right]
+\prod_{k\in N(a)\setminus j}q_{k\to a}(e_k).
+$$ {#eq-bp-check-message}
+
+The constants can normalize each two-component message to sum to one. The exclusion of the recipient is essential. Sending a node's complete posterior back to its neighbor would immediately feed the neighbor's own evidence back as if it were new.
+
+After sufficient tree passes the marginal is
+
+$$
+Q_j(b)\propto P_j(b)\prod_{a\in N(j)}r_{a\to j}(b).
+$$
+
+On a tree this is exact. On a loopy graph one repeatedly applies the same equations, hoping the local approximations settle to useful beliefs. BP is then an algorithm with a specified schedule, initialization, damping, and iteration limit; “run BP” is not a complete reproducibility statement.
+
+### From exponential sums to the parity identity
+
+A check of degree $w$ appears to require $2^{w-1}$ terms per outgoing message. Parity makes it simpler. For a binary variable, $\mathbb E[(-1)^e]=q(0)-q(1)$. Under the product assumption, the parity of all incoming variables has expectation
+
+$$
+\mathbb E\left[(-1)^{\oplus_k e_k}\right]
+=\prod_k[q_k(0)-q_k(1)].
+$$
+
+Since a binary random variable's probabilities are $(1\pm\mathbb E[(-1)^e])/2$, the even and odd parity probabilities can be recovered from this single product. Define log likelihood ratios
+
+$$
+\lambda_j=\log\frac{1-p_j}{p_j},\qquad
+L_{j\to a}=\log\frac{q_{j\to a}(0)}{q_{j\to a}(1)},\qquad
+R_{a\to j}=\log\frac{r_{a\to j}(0)}{r_{a\to j}(1)}.
+$$
+
+Then $q(0)-q(1)=\tanh(L/2)$, giving
+
+$$
+L_{j\to a}=\lambda_j+\sum_{c\in N(j)\setminus a}R_{c\to j},
+$$ {#eq-bp-llr-variable}
+
+$$
+R_{a\to j}=2\operatorname{atanh}\left[
+(-1)^{s_a}\prod_{k\in N(a)\setminus j}
+\tanh\frac{L_{k\to a}}2\right].
+$$ {#eq-bp-tanh-check}
+
+Positive LLR favors no error. A syndrome-one check flips the sign of its outgoing preference, so the check asks its neighbors to produce odd parity. The final LLR is $L_j=\lambda_j+\sum_aR_{a\to j}$ and the marginal error probability is $1/(1+e^{L_j})$.
+
+Numerical implementations must clip arguments away from $\pm1$ before `atanh`, handle deterministic priors, and avoid uncontrolled overflow. Prefix/suffix products or stable box-plus recursions compute all outgoing messages in time proportional to the number of Tanner edges per iteration, rather than recomputing every product from scratch.
+
+### A one-check calculation
+
+Take $H=(1\;1\;1)$, syndrome one, and $p_j=0.1$. The exact probability of the syndrome is
+
+$$
+P(s=1)=3(0.1)(0.9)^2+(0.1)^3=0.244.
+$$
+
+The numerator for $P(e_1=1\mid s=1)$ is $0.1[(0.9)^2+(0.1)^2]=0.082$, so the marginal is $0.082/0.244\approx0.3361$. The Tanner graph is a tree, so one check-message pass gives exactly this value. Yet all three marginal hard decisions are zero, violating the measured parity. Exact marginals are not the same object as a valid joint configuration. This example already explains why a BP implementation must check $H\hat e=s$ after hard decisions.
+
+One can turn tree inference into joint maximum-a-posteriori decoding by a compatible max-product or traceback procedure. In practice BP decoders typically take local hard decisions and then use syndrome checks and post-processing. Neither exact bitwise marginals nor maximum-probability individual errors automatically select the most probable quantum logical coset.
+
+## Why quantum degeneracy makes BP difficult
+
+Quantum codes identify errors differing by stabilizers. If a stabilizer has low weight, many similarly likely errors have the same syndrome and logical effect. Their individual probabilities may be spread across several variables, even when their common logical class is overwhelmingly likely. Independent hard decisions can splice together parts of mutually incompatible representatives.
+
+The smallest illustration is $H=(1\;1)$ with $s=1$ and identical priors. Errors $10$ and $01$ have equal posterior probability, so both exact marginals are $1/2$. A deterministic tie rule chooses either $00$ or $11$, both invalid. If $11$ is a stabilizer support in an appropriate CSS sector, the two allowed errors are equivalent: quantum degeneracy makes their symmetry harmless physically, while a local hard-decision rule cannot choose between them consistently.
+
+Sparse quantum checks also create troublesome short loops. CSS orthogonality requires every $X$ and $Z$ row to overlap evenly, and self-orthogonal constructions and stabilizer relations frequently produce short cycles in the relevant factor graphs. On a cycle, evidence can return to its origin after several iterations. The independence assumption then overcounts information, leading to overconfident beliefs, oscillation, trapping sets, or fixed points that do not satisfy the syndrome. Poulin and Chung analyzed these quantum BP difficulties and proposed symmetry-breaking heuristics [@poulin2008].
+
+The response is not simply to use more iterations. Damping replaces an update by a mixture of the old and proposed message, often stabilizing oscillations. Serial or layered schedules propagate new information sooner than flooding updates. Random perturbations, decimation, memory terms, redundant checks, or learned weights can change convergence. Every modification changes either the iteration dynamics or the approximate inference model, and none is universally best across quantum code families.
+
+### Min-sum and finite precision
+
+At large LLR magnitude, the check update is approximately
+
+$$
+R_{a\to j}\approx(-1)^{s_a}
+\left[\prod_{k\ne j}\operatorname{sgn}L_{k\to a}\right]
+\min_{k\ne j}|L_{k\to a}|.
+$$ {#eq-bp-minsum}
+
+This **min-sum** rule replaces nonlinear functions by signs and minima. Normalized min-sum multiplies the magnitude by $\alpha<1$; offset min-sum subtracts a positive offset and clips at zero. These reduce the common magnitude overestimate. The approximation can be attractive on hardware, but bit width, clipping, schedule, and parameters affect error floors. Comparing a floating-point sum-product simulation with an aggressively quantized hardware decoder requires stating these differences.
+
+## Four-valued Pauli BP
+
+Independent binary decoding loses the relation between the $X$ and $Z$ components of $Y$. Under depolarizing noise,
+
+$$
+P(I)=1-p,\qquad P(X)=P(Y)=P(Z)=p/3,
+$$
+
+whereas marginal component probabilities are $P(x=1)=P(z=1)=2p/3$. Their product would give $P(x=z=1)=4p^2/9$, not the correct $p/3$. This mismatch is especially large at small $p$.
+
+Represent the unknown Pauli at qubit $j$ by $E_j\in\{I,X,Y,Z\}$. Let $S_{aj}$ be check $a$'s local Pauli and define $c_{aj}(E)=0$ or $1$ according to whether $E$ commutes or anticommutes with it. The constraint is $\oplus_jc_{aj}(E_j)=s_a$. Variable messages now have four components:
+
+$$
+q_{j\to a}(E)\propto P_j(E)
+\prod_{b\in N(j)\setminus a}r_{b\to j}(E).
+$$
+
+The check needs only the binary commutation parity of each neighbor. Define
+
+$$
+t_{k\to a}=\sum_{E\in\{I,X,Y,Z\}}
+(-1)^{c_{ak}(E)}q_{k\to a}(E).
+$$
+
+Summing the parity constraint gives the efficient outgoing rule
+
+$$
+r_{a\to j}(E)\propto
+1+(-1)^{s_a+c_{aj}(E)}
+\prod_{k\in N(a)\setminus j}t_{k\to a}.
+$$ {#eq-bp-quaternary-update}
+
+Thus four-valued BP retains a correct local Pauli prior without exponential check cost. It still encounters loops and degeneracy, and it still produces local beliefs rather than exact coset probabilities. For non-CSS stabilizers this commutation-based formulation avoids artificially separating sectors that the code itself couples.
+
+## Ordered statistics decoding from linear algebra
+
+BP can supply useful reliability information even when its hard decision is invalid. **Ordered statistics decoding** (OSD) uses that information to choose a small, structured search through exactly syndrome-consistent errors. BP+OSD is a general baseline for quantum LDPC decoding, developed and benchmarked across broad families by Roffe and collaborators [@roffe2020].
+
+Work with $r$ independent rows of $H$ and the corresponding entries of $s$, so the reduced $H$ has full row rank. A physically valid syndrome must also obey all dependencies among the original rows; check these if arbitrary external syndrome vectors are accepted. Choose $r$ linearly independent columns, called a basis $B$, and call the remaining columns $F$. After a permutation,
+
+$$
+H=(H_B\;H_F),\qquad
+e_B=H_B^{-1}(s+H_Fe_F).
+$$ {#eq-osd-basis-solution}
+
+All arithmetic is binary. Once the $n-r$ free variables are specified, the basis variables are uniquely determined. Consequently every candidate generated by this equation satisfies the syndrome exactly.
+
+The choice of basis makes the search efficient. In a syndrome-decoding convention, sort columns from **least reliable** to most reliable and greedily retain independent columns until they span the row space. This puts unreliable variables into $B$, where the syndrome can determine them, while leaving comparatively reliable variables in $F$. In the equivalent classical codeword presentation one instead speaks of a most reliable information set. These descriptions agree after accounting for which variables are solved and which are guessed; confusing the conventions reverses the reliability ordering.
+
+Let $z_F$ be the BP hard decision on the free coordinates. OSD-0 sets $e_F=z_F$ and solves for $e_B$. Order-$w$ reprocessing enumerates $e_F=z_F+u$ for selected patterns $u$ of weight at most $w$. Score the full candidate using its channel probability, for example
+
+$$
+C(e)=-\sum_j\log P_j(e_j),
+$$ {#eq-osd-candidate-score}
+
+and choose the least costly. BP posterior LLRs are excellent for **ordering** candidates, but are not automatically independent likelihood factors: using them to score a candidate can count syndrome evidence multiple times. The score should be specified separately from the reliability measure.
+
+### A complete elimination example
+
+Consider
+
+$$
+H=\begin{pmatrix}
+1&1&0&1&0\\
+0&1&1&0&1\\
+1&0&1&0&0
+\end{pmatrix},\qquad
+s=\begin{pmatrix}1\\0\\1\end{pmatrix}.
+$$
+
+Suppose the reliability scan selects columns $B=(4,1,2)$ and leaves $F=(5,3)$. Then
+
+$$
+H_B=\begin{pmatrix}1&1&1\\0&0&1\\0&1&0\end{pmatrix},\quad
+H_B^{-1}s=\begin{pmatrix}0\\1\\0\end{pmatrix},\quad
+H_B^{-1}H_F=\begin{pmatrix}1&0\\0&1\\1&1\end{pmatrix}.
+$$
+
+If $z_F=00$, all possible free assignments give:
+
+| $(e_5,e_3)$ | $e$ in original coordinate order | Hamming weight |
+|---|---|---:|
+| $00$ | $10000$ | 1 |
+| $10$ | $11011$ | 4 |
+| $01$ | $01100$ | 2 |
+| $11$ | $00111$ | 3 |
+
+For uniform independent noise below one half, the first has greatest individual probability. Order zero already finds it. Under nonuniform priors the best score need not equal the smallest Hamming weight, and a different syndrome may require a free-coordinate flip to find a good candidate. The important property is that **all four rows are valid**, even if BP's original hard decision was not.
+
+### Cost and degeneracy
+
+Dense Gaussian elimination costs polynomial time, conventionally $O(r^2n)$ bit operations before exploiting packed machine words or sparsity. Reprocessing through all patterns of weight at most $w$ examines
+
+$$
+N_w=\sum_{i=0}^{w}\binom{n-r}{i}
+$$ {#eq-osd-list-size}
+
+candidates. At fixed $w$ this is polynomial in $n$, but the degree grows with $w$; exhaustive free-variable search is exponential. Fast OSD-0 variants can stop once a suitable independent span has been established and exploit syndrome-specific rank. A worst-case dense global solve can still be a major latency and memory bottleneck for large quantum LDPC blocks.
+
+Standard OSD minimizes a representative cost among its list. Quantum success depends on the total probability of a logical class. One can group candidates by logical signature and sum their probabilities, but the result is a truncated coset sum whose accuracy depends on list coverage. A list dominated by many stabilizer-equivalent representatives can also waste work. Approximate degenerate OSD and reliable-subset reduction directly address these issues. Kung, Kuo, and Lai's February 2026 revision describes reliability-based reduction and degeneracy conditions, including circuit-level detector models [@kung2026]. Its reported numerical gains should be interpreted for the tested families and noise models; the reduction does not prove that all discarded variables are correct on every shot.
+
+## A small, reproducible Julia decoder
+
+This demonstration implements a general binary syndrome solver and enumerates a small free-variable list. It intentionally uses transparent dense operations rather than optimized production kernels. `basis` must contain independent columns; a production decoder obtains it by reliability-ordered elimination.
+
+```julia
+using LinearAlgebra
+
+function solve2(A, b)
+    M = hcat(Int.(A) .% 2, Int.(b) .% 2)
+    m, n = size(A)
+    pivots = Int[]
+    row = 1
+    for col in 1:n
+        row > m && break
+        p = findfirst(==(1), M[row:m, col])
+        isnothing(p) && continue
+        k = row + p - 1
+        M[row, :], M[k, :] = copy(M[k, :]), copy(M[row, :])
+        for i in 1:m
+            if i != row && M[i, col] == 1
+                M[i, :] .= (M[i, :] .+ M[row, :]) .% 2
+            end
+        end
+        push!(pivots, col)
+        row += 1
+    end
+    for i in row:m
+        all(iszero, M[i, 1:n]) && M[i, end] == 1 && return nothing
+    end
+    x = zeros(Int, n)
+    for (i, j) in enumerate(pivots)
+        x[j] = M[i, end] # nonpivot variables set to zero
+    end
+    x
+end
+
+function osd_list(H, s, basis, p; order=0, hard=zeros(Int, size(H,2)))
+    n = size(H, 2)
+    free = setdiff(1:n, basis)
+    @assert length(free) <= 20 "This teaching implementation enumerates masks"
+    best, bestcost = nothing, Inf
+    for mask in 0:(2^length(free)-1)
+        count_ones(mask) > order && continue
+        u = [(mask >> (j-1)) & 1 for j in 1:length(free)]
+        e = zeros(Int, n)
+        e[free] = (hard[free] .+ u) .% 2
+        rhs = (s .+ H[:,free] * e[free]) .% 2
+        x = solve2(H[:,basis], rhs)
+        isnothing(x) && continue
+        e[basis] = x
+        @assert (H * e) .% 2 == s
+        cost = -sum(e[j] == 1 ? log(p[j]) : log1p(-p[j]) for j in 1:n)
+        if cost < bestcost
+            best, bestcost = e, cost
+        end
+    end
+    best
+end
+
+H = [1 1 0 1 0; 0 1 1 0 1; 1 0 1 0 0]
+s = [1, 0, 1]
+e = osd_list(H, s, [4,1,2], fill(0.05,5); order=2)
+@assert e == [1,0,0,0,0]
+println(e)
+```
+
+Although it skips high-weight masks, this teaching implementation still loops over all $2^{|F|}$ masks. It is therefore **not** a scalable fixed-order OSD implementation. Production code generates combinations of size at most $w$ directly and reuses elimination products between candidates. This distinction prevents a mathematical polynomial-size list from being implemented accidentally with an exponential outer loop.
+
+## Localized statistics decoding
+
+The global inverse in OSD is unattractive when the syndrome consists of many distant local fault clusters. **Localized statistics decoding** (LSD) uses BP reliabilities to grow local regions and solve their linear systems, merging regions only when necessary. Hillmann and collaborators introduced on-the-fly elimination and benchmarked BP+LSD for surface, hypergraph-product, and bivariate bicycle codes [@hillmann2025].
+
+Let $I$ be a proposed set of fault-variable columns. Let $J$ include **every check touched by those columns**, and let $s_J$ include the zero checks in that region as well as the fired ones. A local solution exists only when
+
+$$
+s_J\in\operatorname{im}H_{J,I},
+\quad\text{equivalently}\quad
+\operatorname{rank}H_{J,I}=\operatorname{rank}(H_{J,I}\mid s_J).
+$$ {#eq-lsd-validity}
+
+Ignoring nearby zero checks would allow local solutions that create unaccounted syndrome at a cluster's boundary. A valid implementation tracks the full incident check set, joins regions when their supports interact, and tests the correct local consistency condition. Globally combining solutions then preserves the full syndrome equation.
+
+LSD seeds clusters at nonzero checks and adds candidate columns using reliability information. Incrementally updating a factorization costs less than recomputing Gaussian elimination after every growth step. Clusters grow until the syndrome is in their column span; higher-order local reprocessing can improve representative selection. In a low-noise regime with small disconnected clusters, different regions can be processed in parallel, and the largest local solve can be much smaller than a global inversion.
+
+This is a physical and algorithmic explanation of favorable subthreshold performance, not a promise of bounded cluster size. At higher density or on adversarial syndromes, clusters can merge across the block. Latency tails, memory traffic, the BP front end, and merging overhead remain important. The 2025 paper establishes numerical performance comparable to BP+OSD in its tests; a universally fast hardware implementation for every quantum LDPC code is an open engineering and mathematical problem.
+
+The unifying design principle is now clear. BP proposes a soft view of where errors are likely. Matching, OSD, or LSD imposes the hard syndrome constraints. A learned front end can replace or augment BP, but must be judged on the full logical decoder, including valid-syndrome recovery, logical ambiguity, preprocessing, and runtime.
+
+## Exercises
+
+### Exercise: exact marginals can be invalid jointly
+
+For one parity check on three bits with syndrome one and equal priors $p<1/2$, derive the exact single-bit posterior. For which values of $p$ is it below one half?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The marginal is $[p(1-p)^2+p^3]/[3p(1-p)^2+p^3]$. Comparing twice the numerator with the denominator reduces to $p^3<p(1-p)^2$, or $p<1/2$ for positive $p$. Thus every bitwise hard decision is zero throughout this range, contradicting the syndrome even though the marginals are exact. The example is a warning about decision rules, not evidence that sum-product is inaccurate on trees.
+:::
+
+### Exercise: derive min-sum signs
+
+In @eq-bp-tanh-check, explain why a syndrome-one check with all positive incoming LLRs sends a negative LLR. Interpret the result physically.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+All $\tanh(L/2)$ factors are positive. The factor $(-1)^{s_a}$ makes their product negative, and `atanh` preserves sign. If the other variables are believed to be zero, the remaining variable should be one to meet odd parity. For arbitrary signs the outgoing sign is $(-1)^{s_a}$ times their product, which is exactly the sign in the min-sum approximation.
+:::
+
+### Exercise: OSD rank and reliability
+
+In the displayed five-variable example, why can columns $(1,2,3)$ not be used as the solved basis? Does choosing the three least reliable columns always work?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+Column three equals column one plus column two, so that set has rank two. An inverse does not exist. Reliability sorting must be combined with independence testing: scan the ordered columns, retain a column only when it increases rank, and continue until rank $r$ is reached. The first $r$ columns in a sorted list are not necessarily a basis.
+:::
+
+### Exercise: a local solve with a hidden boundary syndrome
+
+Let a single candidate fault column touch checks $a$ and $b$, but only $a$ has fired. Can a cluster containing that column be solved by setting its fault bit to one?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+No. The restricted matrix is $(1,1)^T$ and the local target syndrome is $(1,0)^T$, which is outside its column span. The fault would cancel $a$ but create $b$. A cluster construction that included only fired checks would incorrectly declare success. It must grow to include another column, or merge with a region supplying the compensating boundary parity.
+:::

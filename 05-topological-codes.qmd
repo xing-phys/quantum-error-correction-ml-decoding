@@ -1,0 +1,255 @@
+# Surface, toric, and color codes {#sec-topological-codes}
+
+## Why geometry helps
+
+A stabilizer code specifies commuting observables and a subspace. A laboratory also needs a wiring diagram. If every check acts on a few nearby qubits, the apparatus can repeat the same small measurement circuit throughout an array. A surface code turns this engineering preference into a mathematical construction: place qubits on edges of a lattice, measure parity around vertices and faces, and use the topology of extended strings to store information. A local error changes nearby checks, whereas a logical operator must cross the system. Increasing the separation between appropriate boundaries therefore increases the minimum number of errors needed to change the encoded state.
+
+This chapter derives that statement rather than taking topology as a prerequisite. The historical starting points are Kitaev's toric-code construction and the analysis of active topological quantum memory by Dennis, Kitaev, Landahl, and Preskill [@kitaev2003; @dennis2002]. The Hamiltonian language supplies useful intuition, but experimentally repeated syndrome measurements provide the protection. A two-dimensional toric-code Hamiltonian alone does not make a self-correcting memory at nonzero temperature.
+
+Keep three pictures separate. The **physical layout** contains data qubits, measurement ancillas, couplers, and control electronics. The **cellulation** is the vertices, edges, and faces used to define checks. The **decoding graph** represents relationships between detection events and possible faults. They are related, but an edge in a decoding graph need not correspond to a physical coupler.
+
+## Building the toric code
+
+Take an $L\times L$ square lattice with opposite sides identified. Coordinates $x,y$ are integers modulo $L$. A horizontal edge $h_{x,y}$ joins $(x,y)$ to $(x+1,y)$; a vertical edge $v_{x,y}$ joins $(x,y)$ to $(x,y+1)$. Put one data qubit on every edge, giving $n=2L^2$ qubits. At each vertex and face define
+
+$$
+A_{x,y}=X_{h_{x,y}}X_{h_{x-1,y}}X_{v_{x,y}}X_{v_{x,y-1}},
+\qquad
+B_{x,y}=Z_{h_{x,y}}Z_{v_{x+1,y}}Z_{h_{x,y+1}}Z_{v_{x,y}}.
+$$ {#eq-toric-checks}
+
+Every star $A$ commutes with every plaquette $B$. If they are separated they share no qubits. If they meet, they share two, and the two minus signs from $XZ=-ZX$ cancel. Checks of the same type commute automatically. This local even-overlap argument is the geometric version of $H_XH_Z^T=0$.
+
+There are $2L^2$ displayed generators, but two relations:
+
+$$
+\prod_{x,y}A_{x,y}=I,
+\qquad
+\prod_{x,y}B_{x,y}=I.
+$$
+
+Each edge occurs twice in each product. On a connected torus these are the only independent relations within the two families. One way to see the star statement is to multiply stars on a set of vertices: the support of the product consists precisely of edges crossing from that set to its complement. The product is identity only when the set is empty or the entire connected graph. The same argument on the dual lattice proves the face statement. Consequently
+
+$$
+k=n-\operatorname{rank}H_X-\operatorname{rank}H_Z
+=2L^2-(L^2-1)-(L^2-1)=2.
+$$ {#eq-toric-k-count}
+
+The code is therefore $[[2L^2,2,L]]$. The distance still needs a proof.
+
+### Errors are strings; syndromes are endpoints
+
+Consider a product $Z(E)=\prod_{e\in E}Z_e$ along a set of edges $E$. A star anticommutes with it if an odd number of selected edges meet that vertex. Along a simple open string the interior vertices have two selected edges and the endpoints have one. Thus the syndrome marks the endpoints but does not reveal the path. A closed contractible loop has no endpoints and equals a product of enclosed plaquette stabilizers. Moving a string across a face multiplies it by $B_f$ and changes no encoded information.
+
+An $X$ error has the same interpretation on the **dual lattice**, whose vertices are primal faces and whose edges cross primal edges. Its endpoints are violated $Z$ plaquettes. A $Y=iXZ$ error produces both types of endpoint. Decoding $X$ and $Z$ components independently is convenient, but discards this correlation under a depolarizing channel.
+
+For a physical picture, define the commuting Hamiltonian
+
+$$
+\mathcal H=-J_X\sum_v A_v-J_Z\sum_f B_f.
+$$
+
+A violated star costs $2J_X$. Extending an existing $Z$ string changes its location without increasing the number of endpoints. The energy barrier for building a noncontractible string is therefore constant, even though its length grows with $L$. This explains why increasing distance gives active error correction increasing redundancy without producing an increasing thermal energy barrier in this model.
+
+### Homology without assumed algebraic topology
+
+A binary vector over edges is a **1-chain**. Addition is symmetric difference: an edge selected twice disappears. A binary vector over faces is a 2-chain, and a vector over vertices is a 0-chain. Define linear maps
+
+$$
+C_2\xrightarrow{\partial_2}C_1\xrightarrow{\partial_1}C_0,
+\qquad
+\partial_1\partial_2=0.
+$$ {#eq-topological-chain-complex}
+
+$\partial_2$ replaces every selected face by its boundary edges. $\partial_1$ records vertices incident on an odd number of selected edges. The boundary of a boundary is zero because the corners of every face occur twice. With the convention of @eq-toric-checks,
+
+$$
+H_X=\partial_1,\qquad H_Z=\partial_2^T.
+$$
+
+A **cycle** is a chain $z$ with $\partial_1z=0$. A **boundary** is a chain $\partial_2f$. Boundaries are cycles, but the converse can fail. On a torus a loop winding horizontally cannot be the boundary of a set of faces. Two cycles differing by a boundary are equivalent. The quotient
+
+$$
+H_1=\ker\partial_1/\operatorname{im}\partial_2
+$$ {#eq-topological-homology}
+
+is the first homology group over $\mathbb F_2$. Here it is simply a vector space recording two winding parities. This definition contains the operational meaning of topology: syndrome-compatible corrections can differ either by a harmless face boundary or by a harmful winding cycle.
+
+![A periodic square domain representing the torus. The teal loop bounds a plaquette and is a stabilizer; the orange horizontal loop wraps through the identified edges and represents a nonzero homology class. The edge identifications are essential: a path that looks open in the square can close on the torus.](figs/surface-homology){#fig-surface-homology}
+
+Let $E$ be the actual $Z$ error and $R$ a correction with $\partial_1R=\partial_1E$. The residual $E+R$ is a cycle. Correction succeeds precisely when its homology class is zero. Finding the original path is unnecessary. Finding a path with the right endpoints is necessary but insufficient.
+
+### Logical operators and distance
+
+Choose a horizontal primal $Z$ loop and a vertical dual $X$ loop crossing it once. Their supports intersect on one qubit, so they anticommute. They realize one logical Pauli pair. The vertical primal $Z$ loop and horizontal dual $X$ loop give the other. Carefully assigning the crossed pairs avoids incorrectly identifying two commuting loops as conjugate logical observables.
+
+A nontrivial winding cycle contains at least $L$ edges: lift it to the infinite square lattice and its endpoint differs from its start by $(aL,bL)$ with at least one of $a,b$ odd. Its length is at least $|a|L+|b|L\ge L$. Straight winding loops attain $L$. The dual lattice has the same property. Any Pauli commuting with all checks has cycle-valued $X$ and $Z$ components; if it is not a stabilizer, one component is nontrivial and its support has at least $L$ qubits. Therefore $d=L$.
+
+This argument also explains a limitation of distance. At fixed physical error probability, typical errors have weight proportional to $n$, much larger than $d$. A decoder below threshold succeeds because typical error clusters are local and correctable, not because every sampled error has weight below $d/2$.
+
+## Planar patches and boundaries
+
+A torus is mathematically clean but inconvenient to fabricate with nearest-neighbor couplings on a flat chip. Cut it into a patch and introduce two kinds of boundary. We use the following convention throughout this chapter: a **rough boundary** can absorb endpoints of primal $Z$ strings; a **smooth boundary** can absorb endpoints of dual $X$ strings. Some diagrams swap naming conventions by exchanging $X$ and $Z$, so the endpoint rule is more reliable than the adjective.
+
+Along a rough boundary the appropriate vertex checks are absent or modified so that a $Z$ string may end without producing a detection event there. Along a smooth boundary the analogous statement holds for $X$. A rectangular patch with two opposite rough and two opposite smooth sides encodes one qubit. A $Z$ string connecting the rough sides is $\bar Z$; an $X$ string connecting the smooth sides is $\bar X$. Their odd intersection yields the logical anticommutation relation.
+
+```
+                       rough boundary
+                    ===================
+                    |       Z         |
+             smooth | X X X Z X X X X | smooth
+                    |       Z         |
+                    ===================
+                       rough boundary
+```
+
+The labels indicate crossing logical supports, not a complete qubit layout. Moving either support locally by a stabilizer leaves its logical action unchanged. A path from a rough side back to the same rough side is generally trivial; one connecting the two distinct rough sides is the protected relative cycle.
+
+The algebraic construction is **relative homology**: endpoints on the absorbing boundary are declared equivalent to zero. One can implement it entirely with matrices by omitting boundary vertices from the syndrome map and retaining the appropriate face relations. For decoding, a path ending on a compatible boundary pays its physical edge cost but needs no partner detection event at that endpoint.
+
+Let the shortest rough-to-rough primal path have length $d_Z$ and the shortest smooth-to-smooth dual path length $d_X$. Then $d=\min(d_X,d_Z)$. A rectangular patch can choose unequal distances when dephasing and bit flips occur at different rates. Equal geometric distances are not automatically optimal under biased noise, because circuit propagation and boundary behavior also matter.
+
+### Rotated versus unrotated patches
+
+An often used unrotated square patch has $d^2+(d-1)^2$ data qubits. A standard rotated patch has $d^2$ data qubits, $d^2-1$ independent stabilizers, and one encoded qubit. Its bulk checks have weight four and its boundary checks weight two. For odd $d$, there are $(d^2-1)/2$ checks of each type. These counts exclude measurement ancillas: assigning one ancilla to each check gives $2d^2-1$ total qubits for the standard rotated implementation.
+
+The word “rotated” reflects a change in how a patch is cut relative to a square-lattice representation. It does not mean physically rotating a completed processor. The logical operators remain strings of length $d$. Boundary checks are essential to the rank and distance counts; drawing only the interior checkerboard and announcing $d^2$ qubits does not specify a code.
+
+A useful way to read any published patch is to perform four checks: identify every data-qubit position; write the check supports; verify all $X$/$Z$ overlaps are even; compute their binary ranks. Then find candidate logical strings and verify they commute with every check but are absent from the stabilizer row spaces. This turns a picture into a reproducible definition.
+
+## A reproducible torus construction in Julia
+
+The following complete example builds the two parity-check matrices directly from periodic coordinates. It uses integer arithmetic modulo two; numerical floating-point rank is not a substitute for binary rank.
+
+```julia
+using LinearAlgebra
+
+function rank2(M)
+    A = Bool.(M .% 2)
+    row = 1
+    for col in axes(A, 2)
+        row > size(A, 1) && break
+        pivot = findfirst(identity, A[row:end, col])
+        isnothing(pivot) && continue
+        p = row + pivot - 1
+        A[row, :], A[p, :] = copy(A[p, :]), copy(A[row, :])
+        for i in axes(A, 1)
+            if i != row && A[i, col]
+                A[i, :] .= xor.(A[i, :], A[row, :])
+            end
+        end
+        row += 1
+    end
+    row - 1
+end
+
+function toric_checks(L)
+    @assert L >= 3
+    vertex(x, y) = mod(x, L) + L * mod(y, L) + 1
+    h(x, y) = vertex(x, y)
+    v(x, y) = L^2 + vertex(x, y)
+    HX = zeros(Int, L^2, 2L^2)
+    HZ = zeros(Int, L^2, 2L^2)
+    for x in 0:L-1, y in 0:L-1
+        a = vertex(x, y)
+        HX[a, [h(x,y), h(x-1,y), v(x,y), v(x,y-1)]] .= 1
+        HZ[a, [h(x,y), v(x+1,y), h(x,y+1), v(x,y)]] .= 1
+    end
+    HX, HZ
+end
+
+HX, HZ = toric_checks(3)
+@assert all(iszero, (HX * HZ') .% 2)
+@assert (rank2(HX), rank2(HZ)) == (8, 8)
+@assert size(HX, 2) - rank2(HX) - rank2(HZ) == 2
+e = zeros(Int, 18)
+e[1:3] .= 1 # a horizontal winding Z string at y = 0
+@assert all(iszero, (HX * e) .% 2)
+println("[[18, 2, 3]] toric checks verified")
+```
+
+This verifies commutation, rank, and one undetectable loop. To prove that loop is logical computationally, compare $\operatorname{rank}H_Z$ with the rank after appending its transpose as a row: an increase means it is outside the $Z$-stabilizer span. Exhaustively finding minimum-weight logicals is feasible for this small demonstration but scales exponentially if done by naive enumeration.
+
+## Color codes
+
+A two-dimensional color code uses a trivalent lattice whose faces admit three colors, with neighboring faces differently colored. Put data qubits on vertices. For every face $f$, measure
+
+$$
+X_f=\prod_{v\in f}X_v,\qquad Z_f=\prod_{v\in f}Z_v.
+$$ {#eq-color-face-checks}
+
+In the standard closed colex construction, faces have even length and distinct neighboring faces share two vertices. Their overlap parity therefore ensures commutation. A triangular patch uses three differently colored boundaries and can encode one qubit. The same lattice supports both check types, giving a particularly transparent $X\leftrightarrow Z$ symmetry [@bombin2006].
+
+A single $Z$ on an interior vertex violates three neighboring $X$ faces, one of each color. This is a decisive decoding difference from a surface code: an elementary error can create three syndrome defects. A direct reduction to a graph with one fault per ordinary edge is unavailable. Projection methods map parts of the syndrome to surface-code problems and then lift compatible corrections back to the color code. Delfosse's projection construction makes this connection precise [@delfosse2014]. Independent projected solutions need a consistent lift; simply concatenating them can give the wrong support or a residual syndrome. Kubica and Delfosse's later restriction decoder provides a systematic restriction-and-local-lifting construction in arbitrary dimension $d\ge2$, with a correspondence between successful restricted toric-code decoding and color-code recovery [@kubica2023restriction]. This is a reusable connection between code families, rather than a reason to ignore the lifting step.
+
+### The seven-qubit example
+
+The smallest triangular color code is the Steane $[[7,1,3]]$ code. One possible shared binary check matrix is
+
+$$
+H_X=H_Z=
+\begin{pmatrix}
+1&1&1&1&0&0&0\\
+1&1&0&0&1&1&0\\
+1&0&1&0&1&0&1
+\end{pmatrix}.
+$$ {#eq-color-steane-matrix}
+
+Every row has weight four and distinct rows overlap on two positions, so $HH^T=0$. Its rank is three, hence $k=7-3-3=1$. All seven columns are distinct and nonzero, making every weight-one $X$ or $Z$ syndrome distinct. No weight-one or weight-two undetectable binary error exists. The vector $u=(1,1,1,1,1,1,1)$ is in the kernel because every row has even weight. It is not in the row span, giving logical representatives $X^{\otimes7}$ and $Z^{\otimes7}$. Their odd overlap gives anticommutation. Multiplying the all-ones support by the first row produces a weight-three logical, establishing $d=3$.
+
+### Why some logical gates become simple
+
+Applying a Hadamard to every qubit exchanges $X_f$ and $Z_f$. For a self-dual color-code patch, it preserves the stabilizer group and exchanges $\bar X$ and $\bar Z$, implementing a logical Hadamard. A bitwise CNOT between matching blocks sends control $X_f$ to control $X_f$ times target $X_f$ and target $Z_f$ to control $Z_f$ times target $Z_f$. This preserves the two-block stabilizer and implements logical CNOT.
+
+Phase gates need more care. Since $SXS^\dagger=Y=iXZ$, applying $S$ everywhere sends a weight-$w$ $X$ check to $i^w X_fZ_f$. Weight divisible by four makes this phase positive; other lattices use an appropriate pattern of $S$ and $S^\dagger$ on a bipartition. One must check stabilizer signs and the induced logical action, rather than inferring transversality from even check weight alone. For the displayed seven-qubit code the weight-four checks are preserved. Defining $\bar Y=i\bar X\bar Z$, the physical operator $Y^{\otimes7}=i^7X^{\otimes7}Z^{\otimes7}$ acts as $-\bar Y$. Hence transversal $S$ sends $\bar X$ to $-\bar Y$ and implements inverse logical phase, for these logical conventions.
+
+These Clifford advantages do not give a transversal universal gate set. General constraints on transversal fault-tolerant gates and the Bravyi–König classification of constant-depth local gates limit what is possible. In two-dimensional local stabilizer-code families of growing distance, constant-depth geometrically local logical unitaries belong to the Clifford group [@bravyi2013]. Non-Clifford computation requires another resource or another set of assumptions, such as state injection, code switching, extra dimensions, or operations whose depth grows with distance.
+
+## Comparing architectures fairly
+
+Surface and color codes are both local, low-density parity-check constructions: check weights and the number of checks touching each qubit remain bounded as the code grows. Their distances scale with linear size, while their encoded rate tends to zero for a fixed number of planar logical qubits. The local two-dimensional tradeoff $kd^2=O(n)$ under the assumptions of Bravyi, Poulin, and Terhal explains why this is a structural limitation rather than poor lattice design [@bravyi2010]. Good quantum LDPC codes evade the geometric assumptions by allowing nonlocal connectivity in a two-dimensional drawing.
+
+| Property | Surface-code patch | Two-dimensional color-code patch |
+|---|---|---|
+| Data placement in standard construction | Edges, or an equivalent rotated layout | Vertices of a trivalent colex |
+| Typical bulk check weight | Four | Lattice dependent, often six or eight |
+| Defects from one component error | Usually two, or one at a boundary | Three in the bulk |
+| Straightforward decoder structure | Weighted graph matching | Projection, restriction, message passing, or hypergraph methods |
+| Useful gate structure | Lattice surgery and code deformation; transversal interblock CNOT | Additional transversal Clifford operations for suitable patches |
+| Important hardware costs | Ancillas, repeated rounds, boundary scheduling | Larger check circuits and correlated propagation as well as decoder cost |
+
+A lower data-qubit count at fixed distance does not settle an architecture comparison. Count syndrome ancillas, routing resources, check-extraction depth, correlated hook faults, required non-Clifford resources, and decoder latency. A noiseless-syndrome threshold compares data codes and decoders. A circuit-level logical failure probability compares the entire extraction implementation. These are different questions.
+
+## Exercises
+
+### Exercise: a loop is not always logical
+
+On an $L\times L$ torus, multiply all plaquettes in a rectangular region that does not wrap. Determine the resulting support. Then explain what changes if the region is a strip wrapping around the horizontal direction.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+Interior edges occur twice and cancel, leaving the rectangle perimeter. It is a stabilizer even when its perimeter is long. A wrapped strip has two horizontal winding boundaries. Each is individually logical, but their product is a stabilizer: they have the same homology class, and adding a class to itself gives zero over $\mathbb F_2$. Thus two separated representatives of the same logical operator act identically on the code space.
+:::
+
+### Exercise: correction and homology
+
+An actual $Z$ path and an inferred $Z$ path share endpoints on a torus. Prove that their product has zero syndrome, and give conditions for it to be a stabilizer or logical operator.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+Writing supports as binary vectors gives $\partial_1(E+R)=\partial_1E+\partial_1R=0$. It is a stabilizer if $E+R\in\operatorname{im}\partial_2$. Otherwise it represents a nonzero element of $H_1$ and acts logically. The statement concerns the residual operator, not either open path separately. The decoder can choose any path in the correct relative class.
+:::
+
+### Exercise: the seven-qubit logical algebra
+
+Use @eq-color-steane-matrix to verify the code dimension and exhibit a weight-three $Z$ logical. Why is a weight-two $Z$ logical impossible?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The rows are independent, so $k=7-6=1$. The all-ones vector plus row one is $(0,0,0,0,1,1,1)$, hence $Z_5Z_6Z_7$ is equivalent to the all-ones logical. A weight-two vector would have zero syndrome only if its two columns in $H_X$ were equal; all columns are distinct. It cannot be an undetectable logical or stabilizer. The same argument excludes weight one because no column is zero.
+:::
+
+### Exercise: biased rectangular patches
+
+Suppose, only as a low-noise heuristic, that logical component failure rates obey $p_{L,X}\approx A_Xq_X^{(d_X+1)/2}$ and $p_{L,Z}\approx A_Zq_Z^{(d_Z+1)/2}$ with $q_X,q_Z<1$. Derive the relation that approximately balances the two contributions.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+Equating the logarithms yields $\log A_X+(d_X+1)\log q_X/2=\log A_Z+(d_Z+1)\log q_Z/2$. If prefactors are comparable, $(d_X+1)|\log q_X|\approx(d_Z+1)|\log q_Z|$. The more probable component has $q$ closer to one and therefore needs the larger distance. This is an optimization heuristic, not a threshold theorem; circuit correlations and boundary effects can change the prefactors and scaling regime.
+:::

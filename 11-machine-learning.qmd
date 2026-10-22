@@ -1,0 +1,260 @@
+# Learning the decoding problem {#sec-machine-learning}
+
+A decoder is already an inference algorithm: it uses partial observations to decide which hidden error class is most plausible. Machine learning changes how the inference rule is obtained. Instead of deriving every approximation by hand, we choose a family of functions and fit its parameters to examples. The examples can come from a simulator, experiments with known logical preparations, or both. The resulting decoder remains a classical algorithm. A neural decoder does not require a quantum neural network.
+
+The central question is therefore precise: **which conditional probability should be learned, with which information, and under which cost?** This chapter develops the statistical and computational prerequisites needed to answer it. Understanding this formulation prevents several common mistakes: training on physically distinct but logically equivalent labels, confusing bit accuracy with successful correction, and interpreting a network score as a certified probability.
+
+## From observations to decisions {#sec-ml-probability}
+
+Let $E$ denote a physical Pauli error, $S$ its measured syndrome, and $L$ its logical class relative to a chosen reference correction. Capital letters denote random variables; lower-case letters denote their values. A probability distribution is a nonnegative function whose sum over all outcomes is one. The conditional probability
+
+$$
+p(l\mid s)=\frac{p(l,s)}{p(s)}
+$$
+
+answers a repeated-experiment question: among trials giving observation $s$, which fraction have class $l$? Bayes' rule rewrites it as $p(l\mid s)\propto p(s\mid l)p(l)$. The **prior** $p(l)$ describes uncertainty before measuring; the **likelihood** $p(s\mid l)$ describes how observations arise; the **posterior** describes uncertainty after measurement. A likelihood need not sum to one as a function of $l$.
+
+For an $[[n,k]]$ stabilizer code, choose a reference Pauli $T(s)$ with syndrome $s$. Ignoring overall phases, every error giving this syndrome has a unique logical class in the decomposition
+
+$$
+E=T(s)\overline L_l G,\qquad G\in\mathcal S,
+$$
+
+where $\mathcal S$ is the stabilizer group and $\overline L_l$ runs over $4^k$ logical Pauli representatives. A sufficient logical label is the $2k$ binary vector specifying those representatives. Multiplying $E$ by any stabilizer changes the physical error string but leaves its label unchanged. The desired posterior is
+
+$$
+p(l\mid s)=\frac{\sum_{G\in\mathcal S}p(T(s)\overline L_lG)}{\sum_{l',G}p(T(s)\overline L_{l'}G)}.
+$$ {#eq-ml-coset-posterior}
+
+This is a sum over a class, not the probability of its most likely member. Degeneracy enters before machine learning is introduced.
+
+A decision requires a cost function $C(a,l)$ for output $a$ when the true class is $l$. The conditional risk is $R(a\mid s)=\sum_l C(a,l)p(l\mid s)$. For zero-one cost, $C(a,l)=1$ if $a\ne l$ and zero otherwise, minimizing risk yields
+
+$$
+a^*(s)=\underset{l}{\operatorname{argmax}}\ p(l\mid s).
+$$
+
+This is the Bayes classifier and its failure probability is $1-\mathbb E_S\max_l p(l\mid S)$. Even exact inference cannot remove uncertainty that the syndrome does not contain. More training data cannot beat this information limit under the same observations and cost.
+
+### A complete example: three-qubit repetition decoding
+
+For independent bit flips with probability $p$, write $e=(e_1,e_2,e_3)$ and measure $s=(e_1\oplus e_2,e_2\oplus e_3)$. For $s=(1,0)$, the compatible errors are $100$ and $011$. Choosing $T(10)=100$, their logical classes are zero and one. Hence
+
+$$
+p(L=0\mid S=10)=\frac{p(1-p)^2}{p(1-p)^2+p^2(1-p)}=1-p.
+$$
+
+The optimal decoder chooses $100$ for $p<1/2$. For $s=00$, the candidates are $000$ and $111$, and the posterior probability of class one is $p^3/[(1-p)^3+p^3]$. A learned classifier should be more uncertain for a nonzero syndrome than for the all-zero syndrome. Its classification accuracy alone cannot tell us whether it learned this distinction.
+
+For quantum stabilizer codes, several errors may occupy each class, and the analogous calculation sums their probabilities. A network trained to reproduce a single sampled physical string faces conflicting targets even when all those targets implement the same successful recovery. Class labels remove this unnecessary conflict.
+
+## What a supervised model represents {#sec-ml-network}
+
+A feature vector $x$ encodes available information: syndrome bits, detection events, time coordinates, check types, analog readout values, erasure flags, gate identities, and possibly noise estimates. A model $q_\theta(l\mid x)$ approximates the target posterior using trainable real parameters $\theta$. The letter $q$ emphasizes that the fitted distribution may differ from the true distribution $p$.
+
+A linear unit computes $z=w^Tx+b$. A layer computes many such units, followed by an elementwise nonlinear function. Common choices are $\operatorname{ReLU}(z)=\max(0,z)$ and $\tanh z$. Composing layers gives
+
+$$
+h^{(r+1)}=\phi(W^{(r)}h^{(r)}+b^{(r)}),\qquad h^{(0)}=x.
+$$
+
+Without nonlinearities the composition is another affine map, so depth would not create new nonlinear decision boundaries. The hidden components need not correspond to physical quantities. They are coordinates useful for prediction.
+
+For $K$ classes, the final layer produces real numbers $z_1,\ldots,z_K$, called logits. The softmax makes a distribution,
+
+$$
+q_\theta(l\mid x)=\frac{e^{z_l}}{\sum_j e^{z_j}}.
+$$
+
+Subtract $\max_j z_j$ before exponentiating to avoid overflow; this leaves probabilities unchanged. A binary output uses the sigmoid $\sigma(z)=1/(1+e^{-z})$. A single logical qubit can be treated as four exclusive Pauli classes or two binary components. Independent binary outputs approximate the joint distribution by a product. That approximation discards correlations unless the architecture or output factorization restores them.
+
+A dense $4^k$-class softmax is practical for small $k$ and prohibitive for large $k$. Predicting $2k$ independent bits avoids the exponential output size but changes the statistical task. The most probable marginal value of every bit need not form the most probable joint vector. Autoregressive and diffusion models address this distinction in @sec-generative-rl.
+
+## Why cross-entropy learns probabilities {#sec-ml-cross-entropy}
+
+A dataset $\mathcal D=\{(x_i,l_i)\}_{i=1}^N$ contains sampled observations and labels. Assuming independent examples conditional on the model parameters, the likelihood of the labels is $\prod_i q_\theta(l_i\mid x_i)$. Maximizing it is equivalent to minimizing the average negative log-likelihood,
+
+$$
+\widehat{\mathcal L}(\theta)=-\frac1N\sum_{i=1}^N\log q_\theta(l_i\mid x_i).
+$$ {#eq-ml-ce}
+
+This is cross-entropy with one-hot labels. Its population version at fixed $x$ is
+
+$$
+-\sum_l p(l\mid x)\log q_\theta(l\mid x)
+=H[p(\cdot\mid x)]+D_{\mathrm{KL}}(p\Vert q_\theta),
+$$
+
+where $H(p)=-\sum_l p_l\log p_l$ is entropy and $D_{\mathrm{KL}}(p\Vert q)=\sum_l p_l\log(p_l/q_l)$ is Kullback--Leibler divergence. To show nonnegativity, use $-\log u\geq1-u$ with $u=q_l/p_l$, multiply by $p_l$, and sum. Equality requires $q=p$ on the support. Since entropy is independent of $\theta$, minimizing population cross-entropy recovers the true posterior when the model can represent it and optimization succeeds.
+
+These are three separate conditions: sufficient data, adequate model expressiveness, and effective optimization. The identity proves the target of learning; it does not prove a finite neural training run reaches that target. A small empirical loss may coexist with poor out-of-distribution performance.
+
+For binary labels $y\in\{0,1\}$ and probability $q$, the loss is $-y\log q-(1-y)\log(1-q)$. Differentiating $q=\sigma(z)$ gives the particularly simple result
+
+$$
+\frac{\partial\mathcal L}{\partial z}=q-y.
+$$
+
+For softmax cross-entropy, $\partial\mathcal L/\partial z_j=q_j-\mathbf1[j=l]$. The model pushes probability toward the observed class without treating its integer class number as an ordered real quantity. Squared error between class numbers would impose an arbitrary geometry.
+
+### Backpropagation is the chain rule
+
+Consider a one-hidden-layer binary network $a=Wx+b$, $h=\tanh a$, $z=v^Th+c$. Let $\delta=q-y$. Then
+
+$$
+\nabla_v\mathcal L=\delta h,\quad
+\nabla_c\mathcal L=\delta,\quad
+\delta_h=\delta v,\quad
+\delta_a=\delta_h\odot(1-h\odot h),
+$$
+
+$$
+\nabla_W\mathcal L=\delta_a x^T,\qquad \nabla_b\mathcal L=\delta_a.
+$$
+
+The symbol $\odot$ denotes elementwise multiplication. Backpropagation stores intermediate values during a forward pass and applies these local derivatives in reverse order. It avoids separately reevaluating the whole network for every parameter. It is ordinary classical differentiation, not differentiation through quantum measurement.
+
+Finite differences, $(\mathcal L(\theta+\epsilon e_j)-\mathcal L(\theta-\epsilon e_j))/(2\epsilon)$, provide a useful check on a hand-derived gradient for a tiny model. They are expensive and susceptible to roundoff as $\epsilon\to0$, so they are a diagnostic rather than the training method.
+
+## Optimization, capacity, and sample efficiency {#sec-ml-optimization}
+
+Gradient descent updates $\theta\leftarrow\theta-\eta\nabla_\theta\widehat{\mathcal L}$ with learning rate $\eta$. Stochastic gradient descent replaces the full average by a random minibatch. For uniformly sampled examples, this gradient is unbiased. Its noise can help optimization but also makes the training trajectory depend on the random seed. Momentum averages recent gradients. Adaptive optimizers estimate gradient moments to rescale directions. Whatever the optimizer, report its settings and the schedule: an architecture alone does not specify a reproducible decoder.
+
+A large step can diverge; a very small step can stop useful progress. Feature normalization prevents an analog readout with large numeric scale from dominating a syndrome bit only because of units. Weight decay discourages large weights, while early stopping selects a checkpoint using held-out validation data. These are forms of regularization: they bias the solution toward functions that are expected to generalize.
+
+The training, validation, and test sets have different roles. Training determines parameters. Validation selects architecture, learning rate, noise mixture, checkpoint, and calibration. The test set is opened only after those choices. Repeatedly optimizing choices against the same test set makes it part of training even if gradients never use it.
+
+Training at a higher physical error rate can expose more nontrivial patterns, but it also changes the posterior. For independent errors, relative probabilities of different weights depend on $p/(1-p)$. A mixture of noise rates learns the mixture posterior unless the rate or sufficient calibration information is an input. Curriculum learning gradually changes task difficulty; it is a practical optimization strategy, not a theorem about extrapolation to untrained noise regimes.
+
+### Rare failures and reweighting
+
+At low physical noise, a decoder can achieve excellent ordinary accuracy by solving common easy syndromes and failing on the rare events that determine logical reliability. If a rare class occurs with probability $10^{-5}$, a million examples contain only about ten examples of it on average. Counting examples rather than informative failures can obscure a severe data shortage.
+
+Oversampling difficult examples increases their training frequency. However, a weighted loss changes the optimum. For positive class weights $w_l$, minimizing $-\sum_l w_lp_l\log q_l$ with $\sum_l q_l=1$ gives
+
+$$
+q_l^*=\frac{w_lp_l}{\sum_j w_jp_j}.
+$$ {#eq-ml-weighted-target}
+
+Thus weighting is not probability-neutral. If weights depend only on class and are known, recover a posterior proportional to $q_l/w_l$ before calibration. If examples are sampled from a proposal distribution $r(x,l)$, importance weights $p(x,l)/r(x,l)$ restore the target risk when the proposal covers its support. Large weights create high variance; clipping weights reduces variance but introduces bias. State that tradeoff explicitly.
+
+Hard-negative mining, teacher failures, and importance sampling are valuable because decoder errors are structured, not because they manufacture new information. Preserve an untouched sample from the deployment distribution for final evaluation.
+
+## Calibration and uncertainty {#sec-ml-calibration}
+
+A classifier can rank classes correctly and still be overconfident. For binary prediction, calibration means $\Pr(Y=1\mid q(X)=u)=u$ where the conditional statement is defined; finite data require bins or other estimates. For a multiclass decoder, one often evaluates whether the frequency of correct top predictions agrees with their reported confidence. This top-label criterion is weaker than full classwise calibration.
+
+A reliability diagram groups examples by confidence and compares mean confidence with empirical success. Expected calibration error averages absolute bin discrepancies but depends on binning and sample count. Cross-entropy and the Brier score $\sum_l(q_l-\mathbf1[l=y])^2$ are proper scoring rules: in expectation their optimum is the true distribution. Report these alongside failure probability when probabilities drive decisions.
+
+Temperature scaling fits a single positive number $T$ on validation data and replaces logits by $z/T$. It preserves their ordering and therefore leaves a fixed argmax decoder unchanged while altering confidence. The method and its limitations were studied by Guo and collaborators [@guo2017calibration] ([primary paper](https://proceedings.mlr.press/v70/guo17a.html)). A temperature calibrated on stationary simulation is not guaranteed calibrated after hardware drift.
+
+For a hybrid decoder, uncertainty can control compute: use a cheap prediction when confident, and an expensive fallback otherwise. The relevant quantity is then selective risk $\Pr(\text{failure}\mid\text{accepted})$ at acceptance fraction $\Pr(\text{accepted})$. Always report both. A decoder that rejects almost everything can have very small conditional error and poor computational utility.
+
+## Evaluation that measures QEC {#sec-ml-evaluation}
+
+Three metrics answer different questions. Physical-bit accuracy compares $\hat e_i$ with $e_i$ and penalizes harmless stabilizer differences. Syndrome consistency tests whether $H\hat e=s$ in a binary sector, or the corresponding symplectic equation for Pauli vectors. Logical success tests whether the combined error and correction belongs to the stabilizer group. A correction can pass the second test and fail the third. Training should respect this hierarchy.
+
+For a binary CSS sector with parity check $H$, let $r$ be a correction and $e$ the simulated error. First require $H(r+e)=0$. Then test logical parities or membership in the appropriate stabilizer row space. Merely measuring a logical parity without checking residual syndrome can mistakenly classify an invalid physical correction as successful. Conversely, for direct logical-observable prediction in a memory experiment, the output contract is a logical outcome prediction, not an explicit syndrome-clearing Pauli recovery.
+
+If $F$ failures occur in $N$ independent shots, $\hat p_L=F/N$ and its approximate standard error is $\sqrt{\hat p_L(1-\hat p_L)/N}$. At small $F$, use a binomial interval rather than a symmetric Gaussian interval. With zero failures, solving $(1-p_L)^N=0.05$ gives the one-sided 95% upper bound $p_L\leq1-0.05^{1/N}\approx3/N$. Zero observed failures is not evidence of zero true error.
+
+Compare decoders on the same shots when possible. For failure indicators $A_i$ and $B_i$, the difference is the mean of $D_i=A_i-B_i$, and its variance includes their correlation. A paired bootstrap over shots preserves that correlation. Hardware data collected in temporally correlated batches require block resampling or run-level analysis. An independent-shot error bar can otherwise be too narrow.
+
+### Leakage in the statistical sense
+
+Data leakage means information unavailable at deployment enters training inputs, selection, or evaluation. It differs from a qubit leaking outside the computational subspace. Examples include including simulated error locations in features, splitting windows from the same trajectory across training and test, fitting readout normalization using test labels, and selecting a network on the reported test set.
+
+Final data-qubit readout can legitimately supply boundary syndrome information for a completed memory experiment. It cannot be used by an online decoder before that readout occurs. Distinguish causal streaming prediction from offline retrospective prediction. Neither task is inherently preferable; they support different claims.
+
+Split experimental data by acquisition run or time as well as by shots when studying drift. Test at unseen distances, durations, gate sequences, noise biases, and leakage rates separately. Success on longer sequences of the same stationary process is weaker evidence than transfer to a new hardware regime.
+
+### A minimal training and evaluation protocol
+
+```text
+Choose the circuit, observations, reference recovery, and logical convention.
+Generate independent training, validation, and untouched test trajectories.
+For each training minibatch:
+    Encode only information available at the stated prediction time.
+    Convert simulated faults to logical classes in the fixed convention.
+    Evaluate class probabilities and cross-entropy.
+    Backpropagate, then update the model parameters.
+Choose the checkpoint and calibrator using validation trajectories.
+Freeze all choices.
+For each untouched test trajectory:
+    Produce the stated output; include repair, fallback, and postselection.
+    Record logical failure, output validity, confidence, and total runtime.
+Report counts, intervals, deployment assumptions, and complete resources.
+```
+
+The procedure separates fitting a posterior from choosing the operational decision. A calibrated model can support several decisions with different costs, while its final classification accuracy should always be measured for the actual rule used.
+
+## A reproducible miniature learning experiment {#sec-ml-code}
+
+The following Python example uses only NumPy. It enumerates every error of the three-bit repetition code, trains a four-syndrome conditional Bernoulli model using exact expected cross-entropy, and compares with exact posterior probabilities. This is a transparent baseline: no hidden layer can improve the representational capacity of a lookup table on four inputs. The purpose is to expose the statistical target and gradient.
+
+```python
+import itertools
+import numpy as np
+
+p = 0.12
+errors = np.array(list(itertools.product([0, 1], repeat=3)), dtype=int)
+syndrome = np.column_stack((errors[:, 0] ^ errors[:, 1],
+                            errors[:, 1] ^ errors[:, 2]))
+sid = 2 * syndrome[:, 0] + syndrome[:, 1]
+# Pick the lower-weight compatible error as the reference correction.
+reference = np.zeros((4, 3), dtype=int)
+for s in range(4):
+    candidates = errors[sid == s]
+    reference[s] = candidates[np.argmin(candidates.sum(axis=1))]
+residual = errors ^ reference[sid]
+assert np.all(residual == residual[:, :1])
+y = residual[:, 0].astype(float)
+weight = p ** errors.sum(axis=1) * (1-p) ** (3-errors.sum(axis=1))
+mass = np.bincount(sid, weights=weight, minlength=4)
+positive = np.bincount(sid, weights=weight*y, minlength=4)
+truth = positive / mass
+z = np.zeros(4)
+for step in range(20000):
+    q = 1 / (1 + np.exp(-z))
+    gradient = mass*q - positive
+    z -= 8.0 * gradient
+q = 1 / (1 + np.exp(-z))
+print(np.column_stack((np.arange(4), truth, q)))
+assert np.max(np.abs(q - truth)) < 2e-3
+```
+
+A research extension replaces the exact weighted sum by sampled minibatches, repeats random seeds, and investigates low-noise sample scarcity. A second extension gives the model $p$ as an input and tests whether it learns the posterior's dependence on noise. A third deliberately oversamples logical-one labels and observes @eq-ml-weighted-target. Each experiment tests a concept rather than hiding it inside a large software stack.
+
+## Exercises {#sec-ml-exercises}
+
+1. **Irreducible error.** Derive the total optimal failure probability of the three-bit repetition code for $0<p<1/2$. Explain why perfect training cannot improve it using the same syndrome.
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+Majority recovery fails on weight-two and weight-three errors. Therefore $p_L=3p^2(1-p)+p^3=3p^2-2p^3$. Each syndrome identifies two complementary strings; the lower-weight string has greater probability for $p<1/2$. Choosing it minimizes conditional failure separately for every syndrome, proving global optimality under this noise model. A different decoder cannot distinguish the complementary alternatives from syndrome alone.
+:::
+
+2. **Marginal and joint predictions.** A two-bit logical posterior assigns probabilities $p(00)=0.35$, $p(01)=0.30$, $p(10)=0.05$, $p(11)=0.30$. Compare independent marginal decisions with joint maximum-posterior decoding.
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+The first bit is zero with probability $0.65$; the second is one with probability $0.60$. Marginal decisions output $01$, whose probability is $0.30$. Joint decoding outputs $00$, with probability $0.35$. The independent decisions minimize the expected number of wrong bits, whereas joint decoding minimizes block failure. The choice of loss changes the optimal decision.
+:::
+
+3. **Changing the training prior.** The true binary posterior is $p_1=0.1$. Train with class weights $w_1=9$, $w_0=1$. Find the learned optimum and the correction needed for calibration.
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+The weighted optimum is $q_1=9(0.1)/[9(0.1)+0.9]=1/2$. Divide class probabilities by their weights and renormalize: $(q_1/9)/[(q_1/9)+q_0]=0.1$. Interpreting the uncorrected $1/2$ as the deployment posterior would overstate logical-one probability fivefold.
+:::
+
+4. **A zero-failure claim.** How many independent shots with zero failures are required for a one-sided 95% upper bound below $10^{-6}$?
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+Require $1-0.05^{1/N}<10^{-6}$, or $N>\log(0.05)/\log(1-10^{-6})$, approximately $2.996\times10^6$ shots. This establishes an upper bound at a stated confidence level, not a direct estimate with small relative uncertainty. Detecting differences between two decoders near this rate requires additional informative failures or a validated rare-event method.
+:::

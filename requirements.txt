@@ -1,0 +1,8 @@
+# Python 3.12; pinned versions used for the published research edition.
+numpy==2.2.6
+matplotlib==3.10.7
+stim==1.15.0
+pymatching==2.3.1
+beautifulsoup4==4.14.2
+pypdf==6.1.1
+PyYAML==6.0.3

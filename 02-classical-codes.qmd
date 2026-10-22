@@ -1,0 +1,261 @@
+# Classical coding: redundancy, geometry, and inference {#sec-classical-codes}
+
+Before protecting a quantum superposition, it is useful to solve a simpler problem: how can one recover a string of bits after some bits flip? A classical code turns this into geometry. Allowed strings occupy selected points of the binary cube; noise moves a point; decoding tries to identify its origin. The same problem also has an algebraic description through parity constraints and a probabilistic description through posterior inference. Moving comfortably between these three descriptions is a prerequisite for understanding modern decoders.
+
+We begin with exact finite-size statements. Asymptotic rate and capacity enter only after the finite problem is clear. Unless otherwise stated, measurements and encoding are perfect, the block length is fixed, and transmission occurs through a known classical channel.
+
+## The repetition code and the price of redundancy
+
+Encode a message bit as $0\mapsto000$ and $1\mapsto111$. These two allowed strings form a code $C=\{000,111\}$. If at most one bit flips, majority voting returns the original message. The minimum number of flips connecting the two codewords is three, so the code has distance three. It is a $[3,1,3]$ code: three physical bits, one information bit, minimum distance three. Its rate is $R=k/n=1/3$.
+
+Under independent bit flips of probability $p$, majority voting fails when two or three flips occur:
+
+$$
+p_L=\binom32p^2(1-p)+p^3=3p^2-2p^3.
+$$ {#eq-classical-repetition-failure}
+
+For small $p$, a physical error probability of order $p$ becomes a logical failure probability of order $p^2$. Redundancy has suppressed the leading failure mechanism. But the improvement disappears for sufficiently noisy input: $p_L<p$ only for $0<p<1/2$. Moreover, repeating every message bit separately makes the rate approach zero if repetition length is increased without bound. Reliable communication at a nonzero rate needs more sophisticated codes.
+
+The two parity checks $x_1+x_2=0$ and $x_2+x_3=0$ give
+
+$$
+H_{\mathrm{rep}}=\begin{pmatrix}1&1&0\\0&1&1\end{pmatrix}.
+$$
+
+Single flips on bits one, two, and three produce syndromes $10,11,01$. No flip produces $00$. Instead of measuring the bit values and voting, a decoder can identify the same corrective action from the two relative parities. This alternative becomes indispensable when the information is quantum.
+
+## Linear codes and their duals {#sec-classical-linear}
+
+A binary **linear code** is a vector subspace $C\subseteq\mathbb F_2^n$. If it has dimension $k$, it contains $2^k$ codewords. A generator matrix $G\in\mathbb F_2^{n\times k}$ maps a column message $u$ to $c=Gu$. Its columns form a basis of $C$. A parity-check matrix $H\in\mathbb F_2^{m\times n}$ specifies
+
+$$
+C=\ker H,\qquad HG=0,\qquad k=n-\operatorname{rank}_{\mathbb F_2}H.
+$$ {#eq-classical-code-kernel}
+
+We use column messages throughout. Some papers use $k\times n$ generator matrices and row messages; the two conventions differ by transposition, not physics. The number $m$ of written checks need not equal the rank, because redundant checks are allowed.
+
+The **dual code** is $C^\perp=\{v:v\cdot c=0\text{ for every }c\in C\}$. It is the row space of $H$ and has dimension $n-k$. The dimension statement follows because the dot product on $\mathbb F_2^n$ is nondegenerate: every nonzero vector has nonzero dot product with at least one coordinate basis vector. Thus $(C^\perp)^\perp=C$. A code need not be orthogonal to itself; self-orthogonality $C\subseteq C^\perp$ is a special restriction.
+
+For a linear code, the minimum distance can be found by looking only at nonzero codewords:
+
+$$
+d=\min_{c\in C\setminus\{0\}}|c|.
+$$
+
+Indeed, the difference of two codewords is another codeword, and every codeword is a difference from zero. Equivalently, $d$ is the smallest number of columns of $H$ whose binary sum vanishes. A weight-$w$ codeword selects precisely such a set of columns. This column criterion provides a quick proof of the distance of Hamming codes.
+
+### A complete $[7,4,3]$ Hamming example {#sec-hamming-example}
+
+Choose a parity-check matrix whose columns are the seven different nonzero three-bit vectors:
+
+$$
+H=\begin{pmatrix}
+1&0&1&0&1&0&1\\
+0&1&1&0&0&1&1\\
+0&0&0&1&1&1&1
+\end{pmatrix}.
+$$ {#eq-classical-hamming-h}
+
+![The Tanner graph of the Hamming parity-check matrix in @eq-classical-hamming-h. A variable node is joined to check $a$ exactly when $H_{aj}=1$. Column $j$ is the three-bit representation of $j$ with the least significant bit in row one, so column five is $(1,0,1)^T$. Each check measures a parity, and its neighbors collectively determine that constraint.](figs/parity-factor-graph){#fig-hamming-factor-graph}
+
+The connections in @fig-hamming-factor-graph display the same information as the matrix, with each column expanded into its neighboring checks.
+
+Its rank is three because columns one, two, and four form an identity matrix. No column is zero, so there is no weight-one codeword. No two columns coincide, so there is no weight-two codeword. The first three sum to zero, so $1110000$ is a weight-three codeword. Hence $d=3$ and $k=4$.
+
+Use positions $3,5,6,7$ for the four message bits. Solving the three parity equations gives a compatible generator matrix,
+
+$$
+G=\begin{pmatrix}
+1&1&0&1\\
+1&0&1&1\\
+1&0&0&0\\
+0&1&1&1\\
+0&1&0&0\\
+0&0&1&0\\
+0&0&0&1
+\end{pmatrix}.
+$$ {#eq-classical-hamming-g}
+
+For $u=(1,0,1,0)^T$, encoding gives $c=(1,0,1,1,0,1,0)^T$. Suppose bit five flips, producing $y=(1,0,1,1,1,1,0)^T$. Because $Hc=0$,
+
+$$
+s=Hy=H(c+e)=He=(1,0,1)^T.
+$$
+
+This is column five of $H$, so flipping bit five recovers $c$. The message is then read from the four information positions. Hamming's work formalized this efficient use of parity information [@hamming1950]. The example also demonstrates what a syndrome cannot guarantee: two flips on bits one and two have the same syndrome as a single flip on bit three. A decoder that assumes at most one flip will miscorrect this event.
+
+For this single-error decoder on an independent binary symmetric channel, successful recovery of the entire transmitted codeword occurs exactly for weights zero and one. Therefore
+
+$$
+p_{\mathrm{block}}=1-(1-p)^7-7p(1-p)^6=21p^2+O(p^3).
+$$
+
+The coefficient is larger than that of the repetition code, but the Hamming code protects four information bits at once. Comparing codes requires specifying rate, block failure, bit failure, and physical resource cost. A smaller coefficient in one metric does not imply a universally better code.
+
+## Why distance controls adversarial correction
+
+A Hamming ball of radius $t$ around $c$ contains all strings within $t$ flips of it. Balls around distinct codewords are disjoint if $2t<d$. To prove this, suppose $y$ lies within $t$ of both $c$ and $c'$. The triangle inequality gives $d_H(c,c')\le d_H(c,y)+d_H(y,c')\le2t$, contradicting the definition of $d$.
+
+Conversely, if $d\le2t$, take two codewords at distance $d$ and split their differing positions into two sets of sizes at most $t$. There is a string within distance $t$ of both. No decoder can identify the origin for every such event. Thus a distance-$d$ code corrects every pattern of up to
+
+$$
+t=\left\lfloor\frac{d-1}{2}\right\rfloor
+$$
+
+unknown errors. It detects every nonzero error of weight below $d$: such an error cannot be a codeword and must violate a parity check.
+
+If the erroneous locations are known, they are **erasures**. Two compatible codewords can differ only on the erased positions. Fewer than $d$ erasures therefore leave a unique answer. This explains why detected leakage, loss, or flagged unreliable measurements can be less damaging than equally frequent unlocated errors. More generally, $t$ unlocated errors and $r$ erasures are guaranteed correctable if $2t+r<d$.
+
+## Syndromes, cosets, and the actual decoding task {#sec-classical-cosets}
+
+All errors with the same syndrome form a coset of $C$:
+
+$$
+\{e:He=s\}=e_s+C,
+$$ {#eq-classical-coset}
+
+where $e_s$ is any one solution. Indeed, $He=He_s$ precisely when $H(e+e_s)=0$. Each coset contains $2^k$ vectors and there are $2^{n-k}$ different cosets. A **coset leader** is a chosen representative, usually one of minimum weight. A lookup decoder stores one representative for each syndrome and corrects $y$ by adding it.
+
+For a binary symmetric channel with $p<1/2$,
+
+$$
+\operatorname*{argmax}_{e:He=s}P(e)
+=\operatorname*{argmin}_{e:He=s}|e|.
+$$
+
+For unequal independent probabilities, minimum weight becomes minimum weighted weight with coefficients $\log[(1-p_i)/p_i]$. For correlated noise it generally becomes a nonlocal objective. A decoder optimized for the wrong channel is **mismatched**. Its performance is an empirical question; exact syndrome consistency by itself does not protect against a poorly chosen probability model.
+
+To decode the message under a uniform prior, maximize $P(y\mid c)$ over codewords. On an additive channel $y=c+e$, this is equivalent to choosing the most probable error in the observed coset. With a nonuniform message prior, the posterior contains the extra factor $P(c)$. Likewise, minimizing average bit error is different from minimizing block error. The optimal bitwise estimator may combine marginal decisions into a string that is not a codeword. Constraint enforcement and statistical decision quality are distinct requirements.
+
+### Exact finite-block computation
+
+The following Julia example enumerates all $2^7$ error patterns, builds a minimum-weight syndrome table, and evaluates the exact block failure probability. There is no Monte Carlo error. Enumeration is an excellent reference for small codes and becomes exponentially expensive for large ones.
+
+```julia
+H = [1 0 1 0 1 0 1;
+     0 1 1 0 0 1 1;
+     0 0 0 1 1 1 1]
+bits(x, n) = [Int((x >> j) & 1) for j in 0:n-1]
+syndrome(e) = Tuple((H * e) .% 2)
+leader = Dict{NTuple{3,Int},Vector{Int}}()
+for mask in 0:127
+    e = bits(mask, 7)
+    s = syndrome(e)
+    if !haskey(leader, s) || sum(e) < sum(leader[s])
+        leader[s] = e
+    end
+end
+function exact_block_failure(p)
+    total = 0.0
+    for mask in 0:127
+        e = bits(mask, 7)
+        recovered = (e + leader[syndrome(e)]) .% 2
+        if any(!iszero, recovered)
+            w = sum(e)
+            total += p^w * (1-p)^(7-w)
+        end
+    end
+    total
+end
+p = 0.02
+@assert isapprox(exact_block_failure(p),
+                 1 - (1-p)^7 - 7p*(1-p)^6; atol=1e-12)
+```
+
+Ties are resolved by the order of enumeration. An experiment should record such choices because ties can affect finite-size performance, especially for structured or correlated channels.
+
+## Bounds and the meaning of capacity {#sec-classical-capacity}
+
+Finite codes face elementary packing constraints. A radius-$t$ Hamming ball contains
+
+$$
+V(n,t)=\sum_{j=0}^t\binom nj
+$$
+
+strings. Disjoint decoding balls imply the **Hamming bound**,
+
+$$
+2^kV(n,t)\le2^n.
+$$ {#eq-classical-hamming-bound}
+
+The $[7,4,3]$ code saturates it: $16(1+7)=128$. Such a code is called perfect. Perfect packing is rare and does not mean perfect correction under arbitrary noise. It means every received string lies in exactly one radius-one ball.
+
+Another bound is $k\le n-d+1$. Delete any $d-1$ positions from every codeword. Two distinct codewords cannot become equal, because that would mean their original distance was at most $d-1$. The remaining $n-d+1$ bits must therefore distinguish $2^k$ messages. This is the Singleton bound, derived without assuming linearity.
+
+Distance guarantees protect against worst-case error locations. Shannon capacity instead concerns the probability of failure under a specified stochastic channel as $n\to\infty$. For a binary symmetric channel, let $X$ be the input bit, $E$ an independent Bernoulli-$p$ flip, and $Y=X+E$. Conditional entropy satisfies $H(Y\mid X)=h_2(p)$, while $H(Y)\le1$. Therefore
+
+$$
+I(X;Y)=H(Y)-h_2(p)\le1-h_2(p),
+$$
+
+with equality for uniform input. The channel capacity is
+
+$$
+C_{\mathrm{BSC}}=1-h_2(p)
+$$ {#eq-classical-bsc-capacity}
+
+bits per channel use. Capacity is not itself a particular code or decoder.
+
+Here is the geometric intuition behind achievability. For large $n$, almost all noise probability lies on strings of weight close to $np$. Their number grows as approximately $2^{nh_2(p)}$, up to subexponential factors. A random code with $2^{nR}$ codewords can keep typical noise clouds largely distinguishable when $R+h_2(p)<1$. A careful random-coding argument restricts to typical events and bounds average confusion probability, proving the existence of code sequences with vanishing error. An atypically bad received string is allowed to fail.
+
+For the converse, take a uniform message $M$ with $nR$ bits and decoder error probability $P_e$. Fano's inequality, obtained by introducing a binary indicator of decoder failure, gives
+
+$$
+H(M\mid Y^n)\le h_2(P_e)+P_e\log_2(2^{nR}-1).
+$$
+
+The chain rule and the memoryless channel give $I(M;Y^n)\le nC$. Hence $nR\le nC+1+P_enR$. If $P_e\to0$, then $R\le C$. This identifies precisely which limit is claimed: increasing block length at fixed stochastic channel and rate. It does not prove that a polynomial-time decoder exists for every capacity-achieving construction, nor that finite experimental blocks behave asymptotically.
+
+At fixed rate, a code family and decoder can exhibit a decoding transition as channel noise changes. The transition can lie below capacity because of code structure, algorithmic approximation, or both. In quantum memories with fixed encoded dimension, the commonly quoted threshold is a related but different limit. Definitions must accompany numerical threshold values.
+
+## Sparse checks, graphs, and computational difficulty
+
+A parity-check matrix defines a **Tanner graph**: variable nodes represent bits and check nodes represent rows, with an edge where $H_{ai}=1$. Each check demands an even parity among its neighbors. If row and column weights remain bounded as $n$ grows, the code is low-density parity-check, or LDPC. Gallager introduced these sparse constructions and iterative decoding [@gallager1962]. Sparsity makes local computations cheap; it does not automatically make global inference easy.
+
+The posterior can be written as a product of local factors,
+
+$$
+P(e\mid s)\propto
+\prod_i p_i^{e_i}(1-p_i)^{1-e_i}
+\prod_a \mathbf 1\!\left[\sum_iH_{ai}e_i=s_a\pmod2\right].
+$$ {#eq-classical-factor-graph}
+
+This expression is the starting point for belief propagation, tensor-network contraction, and many graph neural decoders. On a tree, messages summarize independent subtrees and exact marginal inference is possible by dynamic programming. On a graph with cycles, neighboring messages may reuse evidence; ordinary belief propagation becomes an approximation. A local update that looks probabilistically reasonable is not automatically exact on a loopy graph.
+
+There are two different bottlenecks. Finding the most probable compatible error is an optimization problem. Summing probabilities over compatible errors is a counting problem. A model may approximate one while failing at the other. General decoding is computationally hard: the decision version of finding a sufficiently low-weight error with a prescribed syndrome is NP-complete [@berlekamp1978]. This is a worst-case result over input matrices. It does not imply that every structured code or typical noise instance is difficult. Surface-code matching, for example, exploits special structure absent from an arbitrary parity-check matrix.
+
+These distinctions prepare the quantum extension. Classical decoding asks which codeword was sent. Quantum decoding must preserve a superposition of codewords, and many different physical errors can have exactly the same effect on that superposition. The relevant inference target therefore changes from a string to a logical equivalence class.
+
+## Exercises with worked solutions
+
+### Exercise 1: distance from columns
+
+Let $H$ be a rank-$r$ matrix with all $2^r-1$ distinct nonzero columns in $\mathbb F_2^r$, with $r\ge2$. Determine $n,k,d$ and verify that its code saturates the single-error Hamming bound.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The length is $n=2^r-1$ and dimension $k=n-r$. Nonzero distinct columns rule out codewords of weights one and two. Choose any two distinct columns $a,b$; their sum is a third distinct nonzero column, so there is a weight-three dependency. Thus $d=3$. Finally $2^k(1+n)=2^{n-r}2^r=2^n$. The syndrome can identify each of the $n$ single-bit errors plus no error with exactly $r$ bits.
+:::
+
+### Exercise 2: a mismatched channel
+
+For the three-bit repetition code and syndrome $(1,0)^T$, the candidates are $100$ and $011$. Let the bit-flip probabilities be $p_1=0.4$ and $p_2=p_3=0.05$. Which error is more likely? For what value of $p_1$ do the two have equal probability?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+Their probabilities are $p_1(1-p_2)(1-p_3)=0.361$ and $(1-p_1)p_2p_3=0.0015$. The weight-one error is much more likely. Equality requires $p_1/(1-p_1)=p_2p_3/[(1-p_2)(1-p_3)]$, so $p_1=0.0025/(0.9025+0.0025)\approx0.00276243$. Below this value the weight-two error is preferred. Minimum weight can fail even when every individual $p_i$ is below one half.
+:::
+
+### Exercise 3: erasures versus unknown errors
+
+For the Hamming code in @eq-classical-hamming-h, show how to recover erased bits in positions one and two. Then show that erasures in positions one, two, and three are ambiguous for at least one received partial word.
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The known coordinates determine the right-hand side of the erased-variable equations. Columns one and two are independent, so their coefficients are uniquely determined. Equivalently, the first two parity equations directly solve $x_1=x_3+x_5+x_7$ and $x_2=x_3+x_6+x_7$. Columns one, two, and three sum to zero. Thus the all-zero codeword and $1110000$ agree on every unerased position and cannot be distinguished after those three erasures. This realizes the distance-three bound.
+:::
+
+### Exercise 4: why bitwise decisions can be invalid
+
+A posterior on three bits assigns probabilities $0.4,0.35,0.25$ to $110,101,011$, respectively, and zero elsewhere. Find the bitwise minimum-error estimate and the most probable full string. Do they agree?
+
+::: {.callout-note collapse="true" title="Worked solution"}
+The probabilities that the three bits equal one are $0.75,0.65,0.60$. Independent marginal decisions therefore give $111$, which has zero posterior probability and odd parity. The most probable string is $110$. The bitwise estimator minimizes expected Hamming loss, whereas the string estimator minimizes block failure. Both are optimal for their respective losses; constraint violation signals that the first loss does not encode the desired decoding task.
+:::

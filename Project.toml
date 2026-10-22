@@ -1,0 +1,6 @@
+name = "QECTextbook"
+uuid = "63989c51-b147-481f-9746-247de1b65bf5"
+version = "0.1.0"
+
+[compat]
+julia = "1.10"

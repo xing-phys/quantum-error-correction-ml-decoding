@@ -1,0 +1,192 @@
+# Attention, Transformers, and decoding at scale {#sec-transformers}
+
+A decoder often needs to connect observations that are far apart in a lattice or separated by many measurement rounds. Convolution propagates information through repeated local steps. Attention provides another mechanism: each feature vector constructs a query, compares it with other vectors' keys, and combines their values with data-dependent weights. It is a learned communication rule.
+
+The Transformer architecture introduced attention as the central component of a powerful sequence model [@vaswani2017attention] ([primary paper](https://arxiv.org/abs/1706.03762)). QEC adds requirements absent from ordinary text modeling: an exact parity structure, boundaries with distinct meanings, persistent hidden faults, logical equivalence, and a continuous stream of measurements. A useful decoding Transformer must encode these structures and meet the classical controller's timing constraints.
+
+## Deriving attention {#sec-transformer-attention}
+
+Let $X\in\mathbb R^{N\times d}$ contain $N$ token vectors, each of width $d$. A token can represent a check measurement, detector event, qubit, fault variable, or local patch. Three learned matrices define
+
+$$
+Q=XW_Q,\qquad K=XW_K,\qquad V=XW_V.
+$$
+
+A query $q_i$ asks which information token $i$ needs. A key $k_j$ advertises what token $j$ contains. A value $v_j$ is the information to pass. Their compatibility score is $a_{ij}=q_i^Tk_j/\sqrt{d_k}+b_{ij}+M_{ij}$, where $b_{ij}$ is a positional or structural bias and the mask $M_{ij}$ is zero for allowed communication and $-\infty$ otherwise. Attention outputs
+
+$$
+\alpha_{ij}=\frac{e^{a_{ij}}}{\sum_{j'}e^{a_{ij'}}},\qquad
+z_i=\sum_j\alpha_{ij}v_j.
+$$ {#eq-transformer-attention}
+
+The square-root factor controls scale. If independent query and key components have zero mean and unit variance, their dot product has variance $d_k$. Dividing by $\sqrt{d_k}$ keeps variance near one as width grows. Otherwise large scores saturate softmax, assigning almost all weight to a few keys and reducing many gradients.
+
+There is a variational interpretation. For fixed scores $a_j$, the distribution $\alpha$ maximizing $\sum_j\alpha_ja_j-\sum_j\alpha_j\log\alpha_j$ subject to normalization is softmax. Differentiate a Lagrangian to obtain $a_j-\log\alpha_j-1+\lambda=0$. Attention is therefore a balance between compatibility and entropy. Its weights resemble a Gibbs distribution, but they are not automatically a posterior over physical error chains.
+
+For a two-token example with scores $(0,\log3)$, the weights are $(1/4,3/4)$. With values $(2,10)$, the output is $8$. Attention computes a context-dependent average, not a hard selection and not an XOR. Parity information must be represented through subsequent nonlinear processing or exact algebraic components.
+
+![Single-head attention with dimensions shown. Queries and keys have shape $N\times d_k$, producing an $N\times N$ compatibility matrix. Row softmax gives normalized weights $A$; multiplying values $V\in\mathbb R^{N\times d_v}$ produces $AV\in\mathbb R^{N\times d_v}$. The drawing omits masks and positional biases, which are added to the scores before softmax.](figs/attention){#fig-attention-mechanism}
+
+### Multihead processing and residual blocks
+
+Different attention heads use distinct projections. Head $r$ computes $Z_r=\operatorname{Attn}(XW_Q^{(r)},XW_K^{(r)},XW_V^{(r)})$. Concatenate the heads and project: $Z=[Z_1|\cdots|Z_H]W_O$. One head may emphasize local spatial relationships, another repeated temporal events, and another check-type correlations, but such interpretations require testing.
+
+A typical block combines attention with a tokenwise nonlinear network through residual updates,
+
+$$
+Y=X+\operatorname{MHA}(\operatorname{LN}(X)),\qquad
+X'=Y+\operatorname{FFN}(\operatorname{LN}(Y)).
+$$ {#eq-transformer-block}
+
+Layer normalization rescales each token using its feature mean and variance; learned gain and offset retain flexibility. The feedforward network usually expands width, applies a nonlinear function, and projects back. Residual connections provide an identity path that eases optimization and allows a layer to make a small refinement rather than replacing the representation entirely.
+
+Dropout randomly omits contributions during training as regularization. It must be disabled in ordinary deterministic inference. An ensemble averages different fitted models or symmetry-related inputs; it increases compute and can improve robustness. State whether quoted accuracy uses a single network or an ensemble.
+
+Choukroun and Wolf's Deep Quantum Error Correction adapts code-aware neural processing to syndrome input and uses differentiable objectives that reflect logical errors over finite fields [@choukroun2024deep] ([primary paper](https://doi.org/10.1609/aaai.v38i1.27756)). This is a useful alternative to treating each physical bit as an unrelated target. The algebraic objective, attention mask, initial error estimate, and treatment of repeated noisy measurements are distinct design choices. Their small-distance benchmarks establish a particular construction; larger-scale and hardware claims require separate tests.
+
+## What should be a token? {#sec-transformer-tokens}
+
+The tokenization determines which physical relationships are easy to express.
+
+| Token | Natural features | Advantages | Principal difficulty |
+|---|---|---|---|
+| Stabilizer/check | Syndrome, type, coordinate, readout quality | Directly matches measured data | Errors live between or across several checks |
+| Detector event | Space-time location and analog confidence | Sparse at low noise | Absent events and varying event count still matter |
+| Data qubit | Nearby check observations, Pauli role, priors | Natural physical-output interface | Embedding must preserve all syndrome information |
+| Circuit fault | Prior, touched detectors, logical effects | Aligns with a detector error model | Many variables; correlated faults and model mismatch |
+| Local patch | Compressed neighborhood and boundary mask | Reduces token count | Compression may erase rare long-range distinctions |
+
+An all-zero syndrome is informative. A sparse event-only representation must encode elapsed time, geometry, and boundaries, and may need background tokens. Otherwise two experiments with different durations but identical detected events can become indistinguishable despite different posterior risks.
+
+Qubit-centric tokenization uses the code incidence structure to transfer syndrome information onto qubit features. Park, Kwak, and Kim's QCT studies this strategy with graph-based attention masks [@park2025qct] ([primary preprint, version 3](https://arxiv.org/abs/2510.11593v3)). The work's large reported threshold concerns its depolarizing-noise benchmark and should not be interpreted as a circuit-level hardware threshold. Its value here is the architectural lesson: token choice and code-aware communication can matter as much as adding more Transformer layers.
+
+## Position, topology, and causality {#sec-transformer-position}
+
+With no positional information, attention is permutation equivariant. If $P$ permutes rows, then $Q,K,V$ are permuted consistently, the score matrix transforms as $PAP^T$, and the output becomes $PZ$. This is useful for unordered sets, but inadequate if identical syndrome values at different locations have different logical meanings.
+
+Absolute coordinates embed $(x,y,t)$ and check type. Relative position biases depend on $(x_i-x_j,y_i-y_j,t_i-t_j)$, graph distance, common adjacent qubits, or boundary relationships. Relative positions can support translation reuse while distinguishing edges. For a torus, spatial differences should respect periodicity. For a planar surface code, Euclidean closeness does not identify whether an error can terminate on a particular boundary.
+
+A graph Laplacian is $\mathcal L=D-A$ or a normalized variant, with adjacency matrix $A$ and degree matrix $D$. Low-frequency eigenvectors provide smooth graph coordinates. They can encode connectivity beyond a rectangular grid, but eigenvectors have sign ambiguities, and degenerate eigenspaces permit arbitrary basis rotations. Cross-graph transfer requires handling these ambiguities rather than assuming eigenvector coordinates are uniquely defined. Joo's spatio-temporal Transformer uses graph positional structure and factorized attention for surface-code histories [@joo2026spatiotemporal] ([primary paper](https://doi.org/10.1140/epjqt/s40507-026-00492-0)).
+
+A temporal causal mask forbids token $i$ from attending to future observations. It is required when predicting online before those observations arrive. Retrospective decoding after the complete experiment can use both temporal directions. A bidirectional network trained on final readout cannot be evaluated as a causal online decoder merely by measuring its matrix-multiplication speed.
+
+The mask can also encode Tanner-graph locality. Repeated masked layers then resemble a graph neural network with adaptive edge weights. Fully global attention has a short information path but greater cost; local attention has cheaper communication but a depth-dependent receptive field. The distinction between graph networks and Transformers is therefore a continuum of communication patterns, not a sharp division.
+
+## Recurrence as learned Bayesian filtering {#sec-transformer-filtering}
+
+Let $f_t$ denote a hidden physical fault state and $o_t$ the observation at round $t$. An exact Bayesian filter updates
+
+$$
+p(f_t\mid o_{1:t})\propto p(o_t\mid f_t)\sum_{f_{t-1}}p(f_t\mid f_{t-1})p(f_{t-1}\mid o_{1:t-1}).
+$$ {#eq-transformer-filter}
+
+The first factor incorporates the new measurement; the sum propagates previous uncertainty through the dynamics. The state space is exponentially large in the number of qubits. A recurrent neural decoder approximates this filter by a finite set of hidden vectors $H_t=F_\theta(H_{t-1},o_t)$. Those vectors need not be normalized probabilities. They are a learned compressed statistic of the observation history.
+
+A recurrent Transformer can attend across the current spatial tokens and stored hidden states while updating them each round. If it stores $m$ vectors of fixed width for a fixed code, memory is independent of total experiment duration. This is an important improvement over attending to every previous token forever, whose storage grows with duration.
+
+But fixed memory is not automatically sufficient. Leakage can persist for many rounds, rare correlated bursts can alter beliefs about noise, and a logical computation can couple formerly separate blocks. A useful hidden state must preserve the relevant uncertainty, not just a point estimate. Training and ablations should test memory capacity, leakage duration, and long-run numerical stability.
+
+### AlphaQubit and the change in experimental evidence
+
+Bausch, Senior, and collaborators' AlphaQubit is a recurrent Transformer trained by simulation pretraining followed by device-data fine-tuning [@bausch2024alphaqubit] ([primary Nature paper](https://doi.org/10.1038/s41586-024-08148-8)). The published study demonstrated improved logical prediction on Sycamore distance-three and distance-five memory data, and tested simulated larger surface codes through distance eleven with leakage, cross-talk, and analog readout information. It also tested long sequence extrapolation. The original implementation did not meet its stated superconducting throughput target. These are strong numerical and experimental decoding results under specified tasks, rather than a proof of universal scalability.
+
+Senior and collaborators' AlphaQubit 2 preprint, version 2 dated 11 March 2026, reports surface- and color-code decoding with real-time implementations below one microsecond per cycle on commercial accelerators through surface distance eleven and color distance nine [@senior2025alphaqubit2] ([primary preprint](https://arxiv.org/abs/2512.07737v2)). Its scalable spatiotemporal design and distinct high-accuracy and real-time configurations show why architecture, training curriculum, and implementation must be evaluated together. Treat the reported benchmark as evidence for those implementations, not as a bound for arbitrary circuits or larger distances.
+
+## Computational scaling and timing {#sec-transformer-scaling}
+
+Dense attention forms $N^2$ pair scores. For fixed head count and width it requires $O(N^2d)$ arithmetic and conventionally $O(N^2)$ attention storage, although optimized kernels can avoid materializing the full score matrix. The input and output projections add $O(Nd^2)$ work. In a space-time grid with $m$ spatial tokens and $T$ rounds, full attention over all measurements has $N=mT$, making temporal growth costly.
+
+Several structured alternatives change this accounting:
+
+- **Spatial-temporal factorization:** attend spatially within each round and temporally along corresponding spatial sites. Score work scales as $O(Tm^2+mT^2)$ for a simple full factorization, with width factors suppressed.
+- **Recurrence:** process a fixed set of spatial states per round. Work grows linearly with duration, while per-round spatial attention may remain quadratic in $m$.
+- **Local attention:** give each token at most $b$ neighbors, reducing score work to $O(Nbd)$, while requiring multiple layers for distant communication.
+- **Linear attention:** replace softmax by a kernel factorization, allowing reassociation of sums. This changes the attention family and does not reproduce arbitrary softmax attention exactly.
+- **Hierarchical processing:** compress patches and exchange global information at coarser scales. Accuracy depends on what compression retains.
+
+For kernel features $\phi$, a common linear form is
+
+$$
+z_i=\frac{\phi(q_i)^T\left[\sum_j\phi(k_j)v_j^T\right]}{\phi(q_i)^T\left[\sum_j\phi(k_j)\right]}.
+$$
+
+The bracketed terms can be accumulated without forming all $i,j$ pairs. Numerical stability and the expressive consequences of the kernel matter. A claim of linear complexity should specify which dimensions are held fixed.
+
+A real-time controller needs more than high average throughput. **Latency** is time from receiving necessary measurements to a usable output. **Throughput** is the rate of processing a continuous stream. Batching many experiments improves accelerator throughput but may increase the delay of an individual experiment. A decoder with rare large stalls can build a backlog even if its mean is acceptable. Report batch size, preprocessing, transfers, synchronization, compilation warmup, precision, and tail latency.
+
+For a round duration $\tau$ and average service time $t_s$, a serial processor requires $t_s<\tau$ to avoid average queue growth. With $P$ genuinely independent workers, average capacity may reach $P/t_s$, but only if the decoding task can be partitioned consistently. A recurrent state introduces dependencies between rounds. Sliding-window parallelism needs compatible boundary handling and a rule for combining outputs.
+
+Zhang and collaborators explicitly study this interface problem with self-coordinating window labels for recurrent Transformer decoding [@zhang2025parallel] ([primary preprint](https://arxiv.org/abs/2509.03815)). Their approach illustrates why splitting a syndrome sequence into pieces is an algorithmic change: separately predicted global labels cannot always be joined by an arbitrary XOR.
+
+## Quantum LDPC codes and transfer {#sec-transformer-qldpc}
+
+For a high-rate quantum LDPC code, the problem contains many logical variables and a sparse graph without a simple planar image. Attention may operate on its Tanner graph, detector graph, or a combination of variable and check tokens. Edge features should distinguish stabilizer incidence from circuit fault incidence. A code-level positional embedding should be derived from the actual graph or algebraic construction.
+
+GraphQEC combines graph structure with sequence modeling in a code-agnostic architecture [@hu2025graphqec] ([primary preprint, version 2](https://arxiv.org/abs/2502.19971v2)). Yan and collaborators' neural transfer unification aligns related decoding tasks across code distances and instantiates a Transformer for surface and bivariate bicycle codes [@yan2026ntu] ([primary preprint](https://arxiv.org/abs/2606.27119)). These are numerical studies of broad applicability and transfer strategies. "Code-agnostic architecture" means that the input format and operations accept multiple codes; it does not mean that a single frozen model has learned the posterior of every stabilizer code and every noise model.
+
+Four experiments distinguish transfer claims: training separately at each distance; training one model on multiple distances; adapting a small-distance model with new large-distance data; and applying a frozen model to an unseen distance. A fifth, harder experiment transfers to an unseen code family. Report these separately. Shared parameters reduce model size, while additional adaptation can still dominate total training cost.
+
+The same care applies to logical computation. A CNOT propagates $X$ from control to target and $Z$ from target to control. Independent memory decoders miss the resulting cross-block correlations. Zhou and collaborators' modular circuit decoder and Bonilla Ataides and collaborators' attention-based algorithmic decoder explicitly address this missing structure [@zhou2025circuits; @bonilla2026algorithms] ([MCCD paper](https://doi.org/10.1038/s43588-025-00897-4), [algorithmic attention paper](https://doi.org/10.1103/vjn1-mbxl)). Their motivation is to learn decoding updates conditioned on logical operations, rather than assuming a memory decoder automatically becomes a computation decoder.
+
+## A minimal attention calculation in Julia {#sec-transformer-demo}
+
+This executable example shows causal masking and row normalization. It does not constitute a trained decoder. Alter the mask to represent Tanner-graph neighborhoods and inspect which communication paths become possible.
+
+```julia
+using LinearAlgebra
+X = [1.0 0.0; 0.0 1.0; 1.0 1.0]
+Q, K, V = X, X, X
+scores = Q * K' / sqrt(size(Q, 2))
+for i in axes(scores, 1), j in axes(scores, 2)
+    if j > i
+        scores[i, j] = -Inf
+    end
+end
+function rowsoftmax(A)
+    shifted = A .- maximum(A, dims=2)
+    ex = exp.(shifted)
+    ex ./ sum(ex, dims=2)
+end
+A = rowsoftmax(scores)
+Z = A * V
+@assert all(isapprox.(vec(sum(A, dims=2)), 1.0))
+@assert A[1,2] == 0 && A[1,3] == 0
+println("Attention weights: ", A)
+println("Contextual features: ", Z)
+```
+
+Every attention row must have at least one allowed key. Masking all entries gives an undefined normalization, a common source of numerical failures in padded graph batches. Validity masks and physical boundary masks serve different purposes and should be checked independently.
+
+## Exercises {#sec-transformer-exercises}
+
+1. **Quadratic attention.** A memory experiment has $100$ check tokens per round and $1,000$ rounds. How many pair scores are formed by full attention, and by independent spatial attention within each round?
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+Full attention has $N=10^5$ tokens and $N^2=10^{10}$ scores per head per layer. Spatial attention forms $1,000\times100^2=10^7$ scores. The reduction is a factor of $1,000$, but purely independent spatial attention cannot communicate temporal information; recurrence or temporal processing must provide it. Memory-efficient kernels alter storage, not this basic pair-count arithmetic.
+:::
+
+2. **Permutation symmetry.** Why can a position-free Transformer not distinguish two geometrically different arrangements of otherwise identical check tokens?
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+Permuting token rows merely permutes queries, keys, and values. Scores become $PAP^T$, row softmax transforms in the same way, and outputs become $PZ$. A permutation-invariant pooled head consequently gives the same result. Geometry must enter through features, masks, edges, or positional biases. The model cannot reconstruct missing physical information from token ordering that its computation ignores.
+:::
+
+3. **Throughput and batching.** A GPU processes $100$ independent histories in $50\,\mu\mathrm s$. Is this sufficient evidence for a $0.5\,\mu\mathrm s$ latency decoder?
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+It demonstrates amortized throughput of $0.5\,\mu\mathrm s$ per history for that batch, not individual latency. Each history may wait roughly $50\,\mu\mathrm s$, plus data movement and batching delay. A feedback-dependent operation may require the individual result before continuing. Both latency and sustained stream throughput must therefore be measured.
+:::
+
+4. **A logical CNOT.** Before a noiseless logical CNOT, the control has a logical $X$ fault and the target has no fault. Why can post-gate decoding require a joint model?
+
+::: {.callout-note collapse="true"}
+## Worked solution
+
+Conjugation gives $X_c\mapsto X_cX_t$, so the output faults are correlated. Evidence in the target can change the posterior for the control and vice versa. A product of independent memory posteriors omits this dependence. A gate-conditioned recurrent update or attention between the two blocks can represent it, provided training data cover the propagation mechanism.
+:::
